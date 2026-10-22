@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "skills": {
+    "ui": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui/SKILL.md",
+      "computedHash": "4019dcb930e8c9f5fb9b1e8f6b11e87bfd32d74cee64d1361cce6b10ee7b4be5"
+    },
+    "ui-ugui": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-ugui/SKILL.md",
+      "computedHash": "2e863af9fb1d41e570a9e6c1f8850874bfce7de923a1b7ad3af48d37450f41e2"
+    },
+    "ui-uitk": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/ui-uitk/SKILL.md",
+      "computedHash": "b1df693958fe56020afb89850371ec15bf5d9fb7ae242e0a323e7234a1d00240"
+    },
+    "unity-cli": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/unity-cli/SKILL.md",
+      "computedHash": "b238ae2011256f6a5df07d9f868f4d9cf6daa6b338422ec4c6ffe05554d0202b"
+    },
+    "unity-package-management": {
+      "source": "unity-technologies/skills",
+      "sourceType": "github",
+      "skillPath": "skills/unity-package-management/SKILL.md",
+      "computedHash": "2fe0a6df999b8249ca7b3d4b7edf7de7ff9ebdfe3c350d66ed13a3ac964a2972"
+    }
+  }
+}
