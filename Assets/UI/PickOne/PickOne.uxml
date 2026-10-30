@@ -1,0 +1,160 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:ec="ExamCards.UI">
+    <ui:Style src="PickOne.uss" />
+    <ui:VisualElement name="screen" class="screen">
+        <ui:VisualElement name="header" class="header">
+            <ui:VisualElement class="header__group">
+                <ui:VisualElement class="logo">
+                    <ui:VisualElement class="icon icon--logo" />
+                    <ui:Label text="CardQuest" class="logo__text" />
+                </ui:VisualElement>
+                <ui:VisualElement class="nav">
+                    <ui:VisualElement class="nav-link nav-link--active">
+                        <ui:Label text="Arena" class="nav-link__text" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="nav-link">
+                        <ui:Label text="My Deck" class="nav-link__text" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="nav-link">
+                        <ui:Label text="Ranks" class="nav-link__text" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="nav-link">
+                        <ui:Label text="Quests" class="nav-link__text" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="header__group">
+                <ui:VisualElement class="progress">
+                    <ui:Label name="progressLabel" text="Question 1 of 1" class="progress__label" />
+                    <ui:Label name="progressPercent" text="0%" class="progress__percent" />
+                    <ui:VisualElement class="progress__bar">
+                        <ui:VisualElement name="progressFill" class="progress__fill" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="stat stat--gold">
+                    <ui:VisualElement class="icon icon--coin" />
+                    <ui:Label text="1,420" class="stat__text" />
+                </ui:VisualElement>
+                <ui:VisualElement class="stat">
+                    <ui:VisualElement class="icon icon--timer" />
+                    <ui:Label text="0:28" class="stat__text" />
+                </ui:VisualElement>
+                <ui:VisualElement class="header__tools">
+                    <ui:VisualElement class="icon-button">
+                        <ui:VisualElement class="icon icon--sound" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="icon-button icon-button--spaced">
+                        <ui:VisualElement class="icon icon--pause" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="icon-button icon-button--brand">
+                    <ui:VisualElement class="icon icon--profile" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement class="main">
+            <ui:VisualElement class="question-section brutal brutal--s4">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:VisualElement class="box question">
+                    <ec:GradientElement class="question__strip" start-color="#FFDEAD" mid-color="#A83223" end-color="#FFDEAD" picking-mode="Ignore" />
+                    <ui:VisualElement class="clue">
+                        <ui:VisualElement name="clueImage" class="clue__image" />
+                        <ec:GradientElement class="clue__fade" vertical="true" start-color="#2A170F00" mid-color="#2A170F00" end-color="#2A170FCC" picking-mode="Ignore" />
+                        <ui:VisualElement class="clue__caption">
+                            <ui:VisualElement class="icon icon--clue" />
+                            <ui:Label name="clueLabel" text="Habitat Clue" class="clue__caption-text" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="clue__badge">
+                            <ui:Label text="Ecosystem Visual" class="clue__badge-text" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="question__body">
+                        <ui:VisualElement class="question__meta">
+                            <ui:VisualElement class="chip chip--mint chip--raised">
+                                <ui:VisualElement class="icon icon--paw" />
+                                <ui:Label name="categoryLabel" text="CATEGORY" class="chip__text" />
+                            </ui:VisualElement>
+                            <ui:VisualElement class="chip chip--gold chip--raised">
+                                <ui:VisualElement class="icon icon--bolt" />
+                                <ui:Label name="xpLabel" text="+0 XP" class="chip__text" />
+                            </ui:VisualElement>
+                            <ui:Label name="challengeLabel" text="CHALLENGE" class="question__challenge" />
+                        </ui:VisualElement>
+                        <ui:Label name="questionText" text="Loading question…" class="question__text" />
+                        <ui:VisualElement class="chip question__hint">
+                            <ui:VisualElement class="icon icon--bulb" />
+                            <ui:Label name="hintLabel" text="Hint" class="chip__text" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+
+            <ui:VisualElement name="cardsRow" class="cards-row" />
+
+            <ui:VisualElement class="hud-section brutal brutal--s4">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:VisualElement class="box hud">
+                    <ui:VisualElement class="hud__group">
+                        <ui:VisualElement class="badge">
+                            <ui:Label text="LIVES" class="badge__label" />
+                            <ui:VisualElement class="hearts">
+                                <ui:VisualElement class="icon icon--heart" />
+                                <ui:VisualElement class="icon icon--heart" />
+                                <ui:VisualElement class="icon icon--heart" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="badge badge--mint">
+                            <ui:VisualElement class="icon icon--streak" />
+                            <ui:Label text="3x Streak Active" class="badge__text" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:VisualElement class="hud__group">
+                        <ui:VisualElement class="utilities">
+                            <ui:VisualElement class="icon icon--utilities" />
+                            <ui:Label text="Match Utilities:" class="utilities__text" />
+                        </ui:VisualElement>
+                        <ui:VisualElement class="powerup">
+                            <ui:VisualElement class="icon icon--fifty" />
+                            <ui:Label text="50/50 Eliminate" class="powerup__text" />
+                            <ui:VisualElement class="chip chip--pink powerup__count">
+                                <ui:Label text="2" class="chip__text" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="powerup">
+                            <ui:VisualElement class="icon icon--freeze" />
+                            <ui:Label text="Freeze +15s" class="powerup__text" />
+                            <ui:VisualElement class="chip chip--mint powerup__count">
+                                <ui:Label text="1" class="chip__text" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="powerup">
+                            <ui:VisualElement class="icon icon--codex" />
+                            <ui:Label text="Codex Lore" class="powerup__text" />
+                            <ui:VisualElement class="chip chip--sand powerup__count">
+                                <ui:Label text="1" class="chip__text" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement class="powerup powerup--cream">
+                            <ui:VisualElement class="icon icon--hint" />
+                            <ui:Label text="Use Hint (2)" class="powerup__text" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="resultsOverlay" class="results results--hidden">
+            <ui:VisualElement class="results__wrap brutal brutal--s4">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:VisualElement class="box results__panel">
+                    <ui:Label text="Exam Complete" class="results__title" />
+                    <ui:Label name="resultsScore" text="You scored 0 / 0" class="results__score" />
+                    <ui:VisualElement class="results__button-wrap brutal brutal--s3">
+                        <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                        <ui:Button name="playAgainButton" text="Play Again" class="primary-button" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

@@ -1,0 +1,45 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="PickOne.uss" />
+    <ui:VisualElement name="answerCard" class="answer-card brutal brutal--s4">
+        <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+        <ui:VisualElement class="box card__box">
+            <ui:VisualElement class="card__header">
+                <ui:VisualElement class="card__tags">
+                    <ui:VisualElement name="primaryTagChip" class="chip chip--sand">
+                        <ui:Label name="primaryTag" text="Marine Mammal" class="chip__text" />
+                    </ui:VisualElement>
+                    <ui:VisualElement class="chip">
+                        <ui:Label name="secondaryTag" text="Pacific Coast" class="chip__text" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+                <ui:VisualElement class="chip chip--peach-2 chip--raised card__key">
+                    <ui:Label name="keyLabel" text="Key [1]" class="chip__text" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="artwork">
+                <ui:VisualElement name="artwork" class="artwork__image" />
+                <ui:VisualElement class="artwork__letter">
+                    <ui:Label name="letterBadge" text="A" class="artwork__letter-text" />
+                </ui:VisualElement>
+                <ui:VisualElement class="chip chip--dark artwork__tier">
+                    <ui:VisualElement class="icon icon--tier" />
+                    <ui:Label name="tierLabel" text="Tier III" class="chip__text" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement class="card__title-row">
+                <ui:Label name="titleLabel" text="Sea Otter" class="card__title" />
+                <ui:Label name="latinLabel" text="Enhydra lutris" class="card__latin" />
+            </ui:VisualElement>
+            <ui:Label name="descriptionLabel" text="Description" class="card__description" />
+            <ui:VisualElement class="card__spacer" />
+            <ui:VisualElement name="traitsRow" class="card__traits" />
+            <ui:VisualElement class="select-wrap brutal brutal--s3">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:Button name="selectButton" class="select-button">
+                    <ui:Label name="selectLabel" text="Select Card [1]" class="select-button__text" picking-mode="Ignore" />
+                    <ui:VisualElement class="icon icon--select" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>
