@@ -5,11 +5,19 @@ namespace ExamCards.Exam.Tests
 {
     public class ExamSessionTests
     {
-        static Question MakeQuestion(int correctIndex) => new Question
+        static QuestionPrompt MakePrompt(string text) => new QuestionPrompt
+        {
+            Question = text,
+            Answers = new[] { "a", "b", "c", "d" },
+            Feedbacks = new[] { "fa", "fb", "fc", "fd" },
+            Explanation = text + " explanation",
+        };
+
+        static Question MakeQuestion(int correctIndex, bool withSimplified = true) => new Question
         {
             Id = Guid.NewGuid().ToString(),
-            Prompt = "?",
-            Options = new[] { new AnswerOption(), new AnswerOption(), new AnswerOption(), new AnswerOption() },
+            Original = MakePrompt("original"),
+            Simplified = withSimplified ? MakePrompt("simplified") : null,
             CorrectIndex = correctIndex,
         };
 
@@ -75,6 +83,91 @@ namespace ExamCards.Exam.Tests
         public void Constructor_EmptyList_Throws()
         {
             Assert.Throws<ArgumentException>(() => new ExamSession(Array.Empty<Question>()));
+        }
+
+        [Test]
+        public void CurrentPrompt_BeforeReveal_IsOriginal()
+        {
+            var question = MakeQuestion(0);
+            var session = new ExamSession(new[] { question });
+
+            Assert.IsFalse(session.IsCurrentRevealed);
+            Assert.AreSame(question.Original, session.CurrentPrompt);
+        }
+
+        [Test]
+        public void Reveal_SwapsCurrentPromptToSimplified()
+        {
+            var question = MakeQuestion(0);
+            var session = new ExamSession(new[] { question });
+
+            Assert.IsTrue(session.Reveal());
+
+            Assert.IsTrue(session.IsCurrentRevealed);
+            Assert.AreSame(question.Simplified, session.CurrentPrompt);
+        }
+
+        [Test]
+        public void Reveal_Twice_ReturnsFalseAndStaysRevealed()
+        {
+            var question = MakeQuestion(0);
+            var session = new ExamSession(new[] { question });
+            session.Reveal();
+
+            Assert.IsFalse(session.Reveal());
+            Assert.AreSame(question.Simplified, session.CurrentPrompt);
+        }
+
+        [Test]
+        public void Reveal_AfterAnswering_WorksAndKeepsScore()
+        {
+            var question = MakeQuestion(1);
+            var session = new ExamSession(new[] { question });
+            session.Answer(1);
+
+            Assert.IsTrue(session.Reveal());
+
+            Assert.AreSame(question.Simplified, session.CurrentPrompt);
+            Assert.IsTrue(session.IsCurrentAnswered);
+            Assert.AreEqual(1, session.Score);
+        }
+
+        [Test]
+        public void Reveal_BeforeAnswering_DoesNotChangeScoring()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(1) });
+            session.Reveal();
+
+            var result = session.Answer(1);
+
+            Assert.IsTrue(result.IsCorrect);
+            Assert.AreEqual(1, session.Score);
+        }
+
+        [Test]
+        public void MoveNext_ResetsReveal()
+        {
+            var second = MakeQuestion(0);
+            var session = new ExamSession(new[] { MakeQuestion(0), second });
+            session.Reveal();
+            session.Answer(0);
+
+            session.MoveNext();
+
+            Assert.IsFalse(session.IsCurrentRevealed);
+            Assert.AreSame(second.Original, session.CurrentPrompt);
+        }
+
+        [Test]
+        public void Reveal_WithoutSimplifiedVersion_DoesNothing()
+        {
+            var question = MakeQuestion(0, withSimplified: false);
+            var session = new ExamSession(new[] { question });
+
+            Assert.IsFalse(question.CanReveal);
+            Assert.IsFalse(session.Reveal());
+            Assert.IsFalse(session.IsCurrentRevealed);
+            Assert.AreSame(question.Original, session.CurrentPrompt);
         }
     }
 }

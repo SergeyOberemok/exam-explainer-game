@@ -1,4 +1,3 @@
-using System.Linq;
 using ExamCards.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -15,7 +14,6 @@ namespace ExamCards.Editor
         const string ThemePath = "Assets/UI/ExamTheme.tss";
         const string ScreenUxmlPath = "Assets/UI/PickOne/PickOne.uxml";
         const string CardUxmlPath = "Assets/UI/PickOne/AnswerCard.uxml";
-        const string ImagesFolder = "Assets/UI/PickOne/Images";
         const string GameObjectName = "PickOneUI";
 
         [MenuItem("Tools/ExamCards/Setup PickOne Scene")]
@@ -32,12 +30,6 @@ namespace ExamCards.Editor
                 Debug.LogError($"Missing UXML at {ScreenUxmlPath} or {CardUxmlPath}.");
                 return;
             }
-
-            var images = AssetDatabase.FindAssets("t:Texture2D", new[] { ImagesFolder })
-                .Select(AssetDatabase.GUIDToAssetPath)
-                .Select(AssetDatabase.LoadAssetAtPath<Texture2D>)
-                .Where(t => t != null)
-                .ToArray();
 
             var scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
 
@@ -56,16 +48,12 @@ namespace ExamCards.Editor
                 screen = go.AddComponent<PickOneScreen>();
             var serialized = new SerializedObject(screen);
             serialized.FindProperty("_answerCardTemplate").objectReferenceValue = cardUxml;
-            var imagesProperty = serialized.FindProperty("_images");
-            imagesProperty.arraySize = images.Length;
-            for (var i = 0; i < images.Length; i++)
-                imagesProperty.GetArrayElementAtIndex(i).objectReferenceValue = images[i];
             serialized.ApplyModifiedPropertiesWithoutUndo();
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
             Selection.activeGameObject = go;
-            Debug.Log($"PickOne screen set up in {ScenePath} with {images.Length} images.");
+            Debug.Log($"PickOne screen set up in {ScenePath}.");
         }
 
         static PanelSettings GetOrCreatePanelSettings()

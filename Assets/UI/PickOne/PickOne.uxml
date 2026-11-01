@@ -57,35 +57,21 @@
                 <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
                 <ui:VisualElement class="box question">
                     <ec:GradientElement class="question__strip" start-color="#FFDEAD" mid-color="#A83223" end-color="#FFDEAD" picking-mode="Ignore" />
-                    <ui:VisualElement class="clue">
-                        <ui:VisualElement name="clueImage" class="clue__image" />
-                        <ec:GradientElement class="clue__fade" vertical="true" start-color="#2A170F00" mid-color="#2A170F00" end-color="#2A170FCC" picking-mode="Ignore" />
-                        <ui:VisualElement class="clue__caption">
-                            <ui:VisualElement class="icon icon--clue" />
-                            <ui:Label name="clueLabel" text="Habitat Clue" class="clue__caption-text" />
+                    <ui:VisualElement class="question__meta">
+                        <ui:VisualElement class="chip chip--mint chip--raised">
+                            <ui:Label name="categoryLabel" text="SECTION" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="clue__badge">
-                            <ui:Label text="Ecosystem Visual" class="clue__badge-text" />
+                        <ui:VisualElement name="simplifiedBadge" class="chip chip--sand chip--raised is-hidden">
+                            <ui:Label text="SIMPLIFIED" class="chip__text" />
                         </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:VisualElement class="question__body">
-                        <ui:VisualElement class="question__meta">
-                            <ui:VisualElement class="chip chip--mint chip--raised">
-                                <ui:VisualElement class="icon icon--paw" />
-                                <ui:Label name="categoryLabel" text="CATEGORY" class="chip__text" />
-                            </ui:VisualElement>
-                            <ui:VisualElement class="chip chip--gold chip--raised">
-                                <ui:VisualElement class="icon icon--bolt" />
-                                <ui:Label name="xpLabel" text="+0 XP" class="chip__text" />
-                            </ui:VisualElement>
-                            <ui:Label name="challengeLabel" text="CHALLENGE" class="question__challenge" />
+                    <ui:ScrollView name="questionScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="question__scroll">
+                        <ui:Label name="questionText" text="Loading question…" enable-rich-text="false" class="question__text" />
+                        <ui:VisualElement name="explanationSection" class="explanation is-hidden">
+                            <ui:Label text="Explanation" class="explanation__title" />
+                            <ui:Label name="explanationText" text="Explanation" enable-rich-text="false" class="explanation__text" />
                         </ui:VisualElement>
-                        <ui:Label name="questionText" text="Loading question…" class="question__text" />
-                        <ui:VisualElement class="chip question__hint">
-                            <ui:VisualElement class="icon icon--bulb" />
-                            <ui:Label name="hintLabel" text="Hint" class="chip__text" />
-                        </ui:VisualElement>
-                    </ui:VisualElement>
+                    </ui:ScrollView>
                 </ui:VisualElement>
             </ui:VisualElement>
 
@@ -109,10 +95,6 @@
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="hud__group">
-                        <ui:VisualElement class="utilities">
-                            <ui:VisualElement class="icon icon--utilities" />
-                            <ui:Label text="Match Utilities:" class="utilities__text" />
-                        </ui:VisualElement>
                         <ui:VisualElement class="powerup">
                             <ui:VisualElement class="icon icon--fifty" />
                             <ui:Label text="50/50 Eliminate" class="powerup__text" />
@@ -134,10 +116,8 @@
                                 <ui:Label text="1" class="chip__text" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:VisualElement class="powerup powerup--cream">
-                            <ui:VisualElement class="icon icon--hint" />
-                            <ui:Label text="Use Hint (2)" class="powerup__text" />
-                        </ui:VisualElement>
+                        <ui:Button name="revealButton" text="Reveal Simplified [R]" focusable="false" class="action-button" />
+                        <ui:Button name="nextButton" text="Next Question" focusable="false" class="action-button action-button--primary is-hidden" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

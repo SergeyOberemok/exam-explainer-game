@@ -391,12 +391,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ExamCards.UI.PickOneScreen
   _answerCardTemplate: {fileID: 9197481963319205126, guid: ea4778dc2bc5d024abdb9bdc7415ab94, type: 3}
-  _images:
-  - {fileID: 2800000, guid: 4a5233aa5f6baa249b335e411c3e2c93, type: 3}
-  - {fileID: 2800000, guid: ba602bf6b0c3b154daf92469593be24c, type: 3}
-  - {fileID: 2800000, guid: 1d15d3d78fd630a4293e92902bd529c6, type: 3}
-  - {fileID: 2800000, guid: 0a7478f98f778574fbb75d79daabee67, type: 3}
-  _feedbackSeconds: 1.5
 --- !u!114 &1626030294
 MonoBehaviour:
   m_ObjectHideFlags: 0

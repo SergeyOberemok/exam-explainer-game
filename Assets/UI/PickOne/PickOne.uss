@@ -30,6 +30,10 @@
 
 /* ---------- shared building blocks ---------- */
 
+.is-hidden {
+    display: none;
+}
+
 /* Hard offset shadow: wrapper holds an absolute .brutal__shadow sibling translated under the box. */
 .brutal {
     position: relative;
@@ -69,19 +73,12 @@
 .icon--sound { width: 13.5px; height: 13.125px; background-image: url("project://database/Assets/UI/PickOne/Icons/sound.svg"); }
 .icon--pause { width: 10.5px; height: 10.5px; background-image: url("project://database/Assets/UI/PickOne/Icons/pause.svg"); }
 .icon--profile { width: 12px; height: 12px; background-image: url("project://database/Assets/UI/PickOne/Icons/profile.svg"); }
-.icon--clue { width: 12.67px; height: 13.33px; background-image: url("project://database/Assets/UI/PickOne/Icons/clue.svg"); }
-.icon--paw { width: 13.33px; height: 12.67px; background-image: url("project://database/Assets/UI/PickOne/Icons/paw.svg"); }
-.icon--bolt { width: 9.33px; height: 11.67px; background-image: url("project://database/Assets/UI/PickOne/Icons/bolt.svg"); }
-.icon--bulb { width: 10px; height: 13.33px; background-image: url("project://database/Assets/UI/PickOne/Icons/bulb-hint.svg"); }
-.icon--tier { width: 8.67px; height: 10.83px; background-image: url("project://database/Assets/UI/PickOne/Icons/tier-shield.svg"); }
 .icon--select { width: 13px; height: 15.75px; background-image: url("project://database/Assets/UI/PickOne/Icons/select-pointer-dark.svg"); }
 .icon--heart { width: 15px; height: 13.76px; background-image: url("project://database/Assets/UI/PickOne/Icons/heart.svg"); }
 .icon--streak { width: 11.33px; height: 13.46px; background-image: url("project://database/Assets/UI/PickOne/Icons/streak.svg"); }
-.icon--utilities { width: 13.5px; height: 15px; background-image: url("project://database/Assets/UI/PickOne/Icons/utilities.svg"); }
 .icon--fifty { width: 16.5px; height: 10.5px; background-image: url("project://database/Assets/UI/PickOne/Icons/fifty.svg"); }
 .icon--freeze { width: 15px; height: 15px; background-image: url("project://database/Assets/UI/PickOne/Icons/freeze.svg"); }
 .icon--codex { width: 16.5px; height: 14.63px; background-image: url("project://database/Assets/UI/PickOne/Icons/codex.svg"); }
-.icon--hint { width: 11.25px; height: 15px; background-image: url("project://database/Assets/UI/PickOne/Icons/hint.svg"); }
 
 /* Small chip; .chip--raised adds the 1px offset shadow as a thicker right/bottom border. */
 .chip {
@@ -200,20 +197,19 @@
 .progress {
     flex-direction: row;
     align-items: center;
-    width: 224px;
+    width: 250px;
     margin-right: 16px;
 }
 
 .progress__label {
-    width: 82px;
+    margin-right: 6px;
     font-size: 11px;
     letter-spacing: 0.55px;
     color: var(--muted);
-    white-space: normal;
 }
 
 .progress__percent {
-    width: 24px;
+    width: 32px;
     font-size: 11px;
     -unity-font-style: bold;
     letter-spacing: 0.55px;
@@ -305,8 +301,7 @@
 }
 
 .question {
-    flex-direction: row;
-    align-items: center;
+    height: 300px;
     padding: 16px 26px;
     overflow: hidden;
 }
@@ -319,75 +314,11 @@
     height: 4px;
 }
 
-.clue {
-    flex-shrink: 0;
-    width: 288px;
-    height: 128px;
-    margin-right: 32px;
-    padding: 2px;
-    overflow: hidden;
-    background-color: var(--peach);
-    border-width: 2px;
-    border-right-width: 4px;
-    border-bottom-width: 4px;
-    border-color: var(--ink);
-}
-
-.clue__image {
-    flex-grow: 1;
-    -unity-background-scale-mode: scale-and-crop;
-}
-
-.clue__fade {
-    position: absolute;
-    left: 2px;
-    top: 2px;
-    right: 2px;
-    bottom: 2px;
-}
-
-.clue__caption {
-    position: absolute;
-    left: 10px;
-    bottom: 6px;
-    flex-direction: row;
-    align-items: center;
-}
-
-.clue__caption-text {
-    margin-left: 6px;
-    font-size: 11px;
-    -unity-font-style: bold;
-    letter-spacing: 0.55px;
-    color: var(--white);
-}
-
-.clue__badge {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    padding: 2px 8px;
-    border-radius: 4px;
-    background-color: rgba(255, 255, 255, 0.85);
-}
-
-.clue__badge-text {
-    font-size: 10px;
-    -unity-font-style: bold;
-    color: var(--muted);
-}
-
-.question__body {
-    flex-grow: 1;
-    flex-shrink: 1;
-    padding-right: 8px;
-    justify-content: center;
-}
-
 .question__meta {
     flex-direction: row;
     align-items: center;
-    margin-bottom: 6px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
 }
 
 .question__meta > .chip {
@@ -399,33 +330,37 @@
     letter-spacing: 0.55px;
 }
 
-.question__challenge {
-    font-size: 11px;
-    -unity-font-style: bold;
-    letter-spacing: 1.1px;
-    color: var(--muted);
+.question__scroll {
+    flex-grow: 1;
+    flex-shrink: 1;
 }
 
 .question__text {
-    margin-bottom: 8px;
-    font-size: 25px;
+    font-size: 17px;
     -unity-font-style: bold;
-    letter-spacing: -0.625px;
     color: var(--heading);
     white-space: normal;
 }
 
-.question__hint {
-    align-self: flex-start;
-    padding: 3px 13px;
+.explanation {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top-width: 2px;
+    border-color: var(--ink);
 }
 
-.question__hint > .icon {
-    margin-right: 8px;
-}
-
-.question__hint > .chip__text {
+.explanation__title {
+    margin-bottom: 4px;
+    font-size: 13px;
+    -unity-font-style: bold;
     letter-spacing: 0.55px;
+    color: var(--brand);
+}
+
+.explanation__text {
+    font-size: 15px;
+    color: var(--muted);
+    white-space: normal;
 }
 
 /* ---------- answer cards ---------- */
@@ -458,40 +393,11 @@
     margin-bottom: 8px;
 }
 
-.card__tags {
-    flex-direction: row;
-    flex-shrink: 1;
-    overflow: hidden;
-}
-
-.card__tags > .chip {
-    margin-right: 4px;
-}
-
 .card__key > .chip__text {
     letter-spacing: 0.55px;
 }
 
-.artwork {
-    flex-shrink: 0;
-    height: 144px;
-    margin-bottom: 10px;
-    padding: 2px;
-    overflow: hidden;
-    background-color: var(--peach);
-    border-width: 2px;
-    border-color: var(--ink);
-}
-
-.artwork__image {
-    flex-grow: 1;
-    -unity-background-scale-mode: scale-and-crop;
-}
-
-.artwork__letter {
-    position: absolute;
-    left: 8px;
-    top: 8px;
+.card__letter {
     width: 28px;
     height: 28px;
     align-items: center;
@@ -503,68 +409,35 @@
     border-color: var(--ink);
 }
 
-.artwork__letter-text {
+.card__letter-text {
     font-size: 15px;
     -unity-font-style: bold;
     -unity-text-align: middle-center;
     color: var(--brand);
 }
 
-.artwork__tier {
-    position: absolute;
-    right: 8px;
-    bottom: 8px;
-}
-
-.artwork__tier > .icon {
-    margin-right: 4px;
-}
-
-.card__title-row {
-    flex-direction: row;
-    align-items: flex-end;
-    justify-content: space-between;
-    margin-bottom: 4px;
-}
-
-.card__title {
-    flex-shrink: 1;
-    font-size: 18px;
+.card__answer {
+    font-size: 14px;
     -unity-font-style: bold;
     color: var(--ink);
+    white-space: normal;
 }
 
-.card__latin {
-    margin-left: 6px;
-    margin-bottom: 2px;
-    font-size: 11px;
-    -unity-font-style: bold-and-italic;
-    color: var(--latin);
-}
-
-.card__description {
-    max-height: 54px;
-    overflow: hidden;
+.card__feedback {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top-width: 1px;
+    border-color: var(--ink);
     font-size: 13px;
     color: var(--muted);
     white-space: normal;
-    text-overflow: ellipsis;
 }
 
-.card__spacer {
+.card__scroll {
     flex-grow: 1;
-}
-
-.card__traits {
-    flex-direction: row;
-    flex-wrap: wrap;
+    flex-shrink: 1;
+    flex-basis: 0;
     margin-bottom: 10px;
-}
-
-.trait {
-    padding: 3px 7px;
-    margin-right: 4px;
-    margin-bottom: 4px;
 }
 
 .select-wrap {
@@ -638,7 +511,7 @@
 }
 
 .answer-card--dimmed {
-    opacity: 0.5;
+    opacity: 0.8;
 }
 
 /* ---------- bottom HUD ---------- */
@@ -699,19 +572,6 @@
     margin-right: 4px;
 }
 
-.utilities {
-    flex-direction: row;
-    align-items: center;
-    margin-right: 16px;
-}
-
-.utilities__text {
-    margin-left: 8px;
-    font-size: 12px;
-    -unity-font-style: bold;
-    color: var(--muted);
-}
-
 .powerup {
     flex-direction: row;
     align-items: center;
@@ -725,10 +585,40 @@
     border-color: var(--ink);
 }
 
-.powerup--cream {
-    height: 34px;
-    margin-left: 12px;
+.action-button {
+    height: 40px;
+    padding: 0 14px;
+    margin: 0 0 0 12px;
+    border-radius: 0;
+    border-width: 2px;
+    border-right-width: 4px;
+    border-bottom-width: 4px;
+    border-color: var(--ink);
+    background-color: var(--gold);
+    font-size: 13px;
+    -unity-font-style: bold;
+    letter-spacing: 0.39px;
+    color: var(--ink);
+}
+
+.action-button:hover {
+    background-color: var(--sand);
+    border-color: var(--ink);
+}
+
+.action-button:disabled {
     background-color: var(--cream);
+    color: var(--muted);
+    opacity: 0.7;
+}
+
+.action-button--primary {
+    background-color: var(--brand);
+    color: var(--white);
+}
+
+.action-button--primary:hover {
+    background-color: var(--brand-dark);
 }
 
 .powerup__text {

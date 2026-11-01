@@ -33,11 +33,15 @@ namespace ExamCards.Exam
         public int Score { get; private set; }
         public Question Current => _questions[CurrentIndex];
         public bool IsCurrentAnswered => _currentAnswered;
+        public bool IsCurrentRevealed { get; private set; }
+
+        /// <summary>The text to display: the simplified version once revealed, otherwise the original.</summary>
+        public QuestionPrompt CurrentPrompt => IsCurrentRevealed ? Current.Simplified : Current.Original;
 
         public AnswerResult Answer(int optionIndex)
         {
             var question = Current;
-            if (optionIndex < 0 || optionIndex >= question.Options.Count)
+            if (optionIndex < 0 || optionIndex >= question.Original.Answers.Count)
                 throw new ArgumentOutOfRangeException(nameof(optionIndex));
             if (_currentAnswered)
                 throw new InvalidOperationException("The current question has already been answered.");
@@ -49,6 +53,15 @@ namespace ExamCards.Exam
             return new AnswerResult(isCorrect, question.CorrectIndex);
         }
 
+        /// <summary>Switches the current question to its simplified text. Returns false if nothing changed.</summary>
+        public bool Reveal()
+        {
+            if (IsCurrentRevealed || !Current.CanReveal)
+                return false;
+            IsCurrentRevealed = true;
+            return true;
+        }
+
         /// <summary>Advances to the next question. Returns false when the exam is over.</summary>
         public bool MoveNext()
         {
@@ -56,6 +69,7 @@ namespace ExamCards.Exam
                 return false;
             CurrentIndex++;
             _currentAnswered = false;
+            IsCurrentRevealed = false;
             return true;
         }
     }

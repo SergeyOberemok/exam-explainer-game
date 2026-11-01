@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using ExamCards.Exam;
@@ -11,64 +10,71 @@ namespace ExamCards.UI
 {
     /// <summary>
     /// Drives the PickOne screen: loads questions from the question service, shows them one by one,
-    /// handles card picks (click or keys 1-4), shows feedback and the final score.
+    /// and handles card picks (click or keys 1-4), Reveal (click or R), Next (click, Enter or Space)
+    /// and the final score.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PickOneScreen : MonoBehaviour
     {
+        const string HiddenClass = "is-hidden";
+        const string ResultsHiddenClass = "results--hidden";
+        const int NoAnswer = -1;
+
         [SerializeField] VisualTreeAsset _answerCardTemplate;
-
-        [Tooltip("Local images for the mock service; matched by texture name against image keys.")]
-        [SerializeField] Texture2D[] _images = Array.Empty<Texture2D>();
-
-        [SerializeField, Min(0f)] float _feedbackSeconds = 1.5f;
 
         static readonly Key[] DigitKeys = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4 };
         static readonly Key[] NumpadKeys = { Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4 };
+        static readonly Key[] NextKeys = { Key.Enter, Key.NumpadEnter, Key.Space };
 
         readonly List<AnswerCardView> _cards = new();
         IQuestionService _questionService;
         IReadOnlyList<Question> _questions;
         ExamSession _session;
         CancellationTokenSource _loadCancellation;
-        bool _acceptingInput;
+        int _answeredIndex = NoAnswer;
+        bool _examFinished;
 
         Label _categoryLabel;
-        Label _xpLabel;
-        Label _challengeLabel;
+        VisualElement _simplifiedBadge;
+        ScrollView _questionScroll;
         Label _questionText;
-        Label _hintLabel;
-        Label _clueLabel;
-        VisualElement _clueImage;
+        VisualElement _explanationSection;
+        Label _explanationText;
         Label _progressLabel;
         Label _progressPercent;
         VisualElement _progressFill;
         VisualElement _cardsRow;
+        Button _revealButton;
+        Button _nextButton;
         VisualElement _resultsOverlay;
         Label _resultsScore;
         Button _playAgainButton;
 
         void OnEnable()
         {
-            _questionService ??= new MockQuestionService();
+            _questionService ??= QuestionServices.Create();
 
             var root = GetComponent<UIDocument>().rootVisualElement;
             _categoryLabel = root.Q<Label>("categoryLabel");
-            _xpLabel = root.Q<Label>("xpLabel");
-            _challengeLabel = root.Q<Label>("challengeLabel");
+            _simplifiedBadge = root.Q("simplifiedBadge");
+            _questionScroll = root.Q<ScrollView>("questionScroll");
             _questionText = root.Q<Label>("questionText");
-            _hintLabel = root.Q<Label>("hintLabel");
-            _clueLabel = root.Q<Label>("clueLabel");
-            _clueImage = root.Q("clueImage");
+            _explanationSection = root.Q("explanationSection");
+            _explanationText = root.Q<Label>("explanationText");
             _progressLabel = root.Q<Label>("progressLabel");
             _progressPercent = root.Q<Label>("progressPercent");
             _progressFill = root.Q("progressFill");
             _cardsRow = root.Q("cardsRow");
+            _revealButton = root.Q<Button>("revealButton");
+            _nextButton = root.Q<Button>("nextButton");
             _resultsOverlay = root.Q("resultsOverlay");
             _resultsScore = root.Q<Label>("resultsScore");
             _playAgainButton = root.Q<Button>("playAgainButton");
 
+            _revealButton.clicked += OnRevealPressed;
+            _nextButton.clicked += OnNextPressed;
             _playAgainButton.clicked += StartExam;
+            _revealButton.SetEnabled(false);
             _cardsRow.Clear();
             _cards.Clear();
 
@@ -80,20 +86,39 @@ namespace ExamCards.UI
             _loadCancellation?.Cancel();
             _loadCancellation?.Dispose();
             _loadCancellation = null;
-            StopAllCoroutines();
-            _acceptingInput = false;
+            _session = null;
+            if (_revealButton != null)
+                _revealButton.clicked -= OnRevealPressed;
+            if (_nextButton != null)
+                _nextButton.clicked -= OnNextPressed;
             if (_playAgainButton != null)
                 _playAgainButton.clicked -= StartExam;
         }
 
         void Update()
         {
-            if (!_acceptingInput || Keyboard.current == null)
+            var keyboard = Keyboard.current;
+            if (_session == null || _examFinished || keyboard == null)
                 return;
+
+            if (keyboard[Key.R].wasPressedThisFrame)
+            {
+                OnRevealPressed();
+                return;
+            }
+
+            foreach (var key in NextKeys)
+            {
+                if (keyboard[key].wasPressedThisFrame)
+                {
+                    OnNextPressed();
+                    return;
+                }
+            }
 
             for (var i = 0; i < DigitKeys.Length && i < _cards.Count; i++)
             {
-                if (Keyboard.current[DigitKeys[i]].wasPressedThisFrame || Keyboard.current[NumpadKeys[i]].wasPressedThisFrame)
+                if (keyboard[DigitKeys[i]].wasPressedThisFrame || keyboard[NumpadKeys[i]].wasPressedThisFrame)
                 {
                     OnCardSelected(i);
                     return;
@@ -118,6 +143,8 @@ namespace ExamCards.UI
             }
             catch (Exception e)
             {
+                if (token.IsCancellationRequested)
+                    return;
                 Debug.LogException(e, this);
                 _questionText.text = "Could not load questions.";
                 return;
@@ -133,21 +160,17 @@ namespace ExamCards.UI
             if (_questions == null || _questions.Count == 0)
                 return;
             _session = new ExamSession(_questions);
-            _resultsOverlay.AddToClassList("results--hidden");
+            _examFinished = false;
+            _resultsOverlay.AddToClassList(ResultsHiddenClass);
             ShowCurrentQuestion();
         }
 
         void ShowCurrentQuestion()
         {
-            var question = _session.Current;
+            _answeredIndex = NoAnswer;
 
-            _categoryLabel.text = question.Category?.ToUpperInvariant();
-            _xpLabel.text = $"+{question.XpReward} XP";
-            _challengeLabel.text = question.ChallengeLabel?.ToUpperInvariant();
-            _questionText.text = question.Prompt;
-            _hintLabel.text = question.Hint;
-            _clueLabel.text = question.ClueText;
-            _clueImage.style.backgroundImage = ToBackground(FindImage(question.ClueImage));
+            var question = _session.Current;
+            _categoryLabel.text = question.Section?.ToUpperInvariant();
 
             var number = _session.CurrentIndex + 1;
             var percent = Mathf.RoundToInt(100f * number / _session.Total);
@@ -155,14 +178,57 @@ namespace ExamCards.UI
             _progressPercent.text = $"{percent}%";
             _progressFill.style.width = Length.Percent(percent);
 
-            EnsureCardCount(question.Options.Count);
+            EnsureCardCount(question.Original.Answers.Count);
+            RenderPrompt();
+        }
+
+        /// <summary>Shows the current text and state. Used for a new question, an answer and a reveal.</summary>
+        void RenderPrompt()
+        {
+            var question = _session.Current;
+            var prompt = _session.CurrentPrompt;
+            var answered = _session.IsCurrentAnswered;
+
+            _questionText.text = prompt.Question;
+            _explanationText.text = prompt.Explanation;
+            _explanationSection.EnableInClassList(HiddenClass, !answered);
+            _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
+
             for (var i = 0; i < _cards.Count; i++)
             {
-                var option = question.Options[i];
-                _cards[i].Bind(option, FindImage(option.Image));
+                _cards[i].Bind(prompt.Answers[i], prompt.Feedbacks[i]);
+                _cards[i].SetState(GetCardState(i, question.CorrectIndex));
             }
 
-            _acceptingInput = true;
+            _revealButton.SetEnabled(question.CanReveal && !_session.IsCurrentRevealed);
+            _revealButton.text = _session.IsCurrentRevealed ? "Simplified Shown" : "Reveal Simplified [R]";
+
+            var isLast = _session.CurrentIndex + 1 >= _session.Total;
+            _nextButton.text = isLast ? "See Results" : "Next Question";
+            _nextButton.EnableInClassList(HiddenClass, !answered);
+
+            ScrollQuestionPanel(answered);
+        }
+
+        AnswerCardState GetCardState(int index, int correctIndex)
+        {
+            if (_answeredIndex == NoAnswer)
+                return AnswerCardState.Interactive;
+            if (index == correctIndex)
+                return AnswerCardState.Correct;
+            return index == _answeredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
+        }
+
+        void ScrollQuestionPanel(bool toExplanation)
+        {
+            // Runs on the next panel update, because the new text has to be laid out first.
+            _questionScroll.schedule.Execute(() =>
+            {
+                if (toExplanation)
+                    _questionScroll.ScrollTo(_explanationSection);
+                else
+                    _questionScroll.scrollOffset = Vector2.zero;
+            });
         }
 
         void EnsureCardCount(int count)
@@ -189,29 +255,26 @@ namespace ExamCards.UI
 
         void OnCardSelected(int index)
         {
-            if (!_acceptingInput || _session == null || _session.IsCurrentAnswered)
+            if (_session == null || _examFinished || _session.IsCurrentAnswered)
                 return;
-            _acceptingInput = false;
 
-            var result = _session.Answer(index);
-            for (var i = 0; i < _cards.Count; i++)
-            {
-                AnswerCardState state;
-                if (i == result.CorrectIndex)
-                    state = AnswerCardState.Correct;
-                else if (i == index)
-                    state = AnswerCardState.Wrong;
-                else
-                    state = AnswerCardState.Dimmed;
-                _cards[i].SetState(state);
-            }
-
-            StartCoroutine(AdvanceAfterFeedback());
+            _session.Answer(index);
+            _answeredIndex = index;
+            RenderPrompt();
         }
 
-        IEnumerator AdvanceAfterFeedback()
+        void OnRevealPressed()
         {
-            yield return new WaitForSeconds(_feedbackSeconds);
+            if (_session == null || _examFinished)
+                return;
+            if (_session.Reveal())
+                RenderPrompt();
+        }
+
+        void OnNextPressed()
+        {
+            if (_session == null || _examFinished || !_session.IsCurrentAnswered)
+                return;
 
             if (_session.MoveNext())
                 ShowCurrentQuestion();
@@ -221,25 +284,9 @@ namespace ExamCards.UI
 
         void ShowResults()
         {
+            _examFinished = true;
             _resultsScore.text = $"You scored {_session.Score} / {_session.Total}";
-            _resultsOverlay.RemoveFromClassList("results--hidden");
+            _resultsOverlay.RemoveFromClassList(ResultsHiddenClass);
         }
-
-        Texture2D FindImage(string key)
-        {
-            if (string.IsNullOrEmpty(key))
-                return null;
-            foreach (var image in _images)
-            {
-                if (image != null && image.name == key)
-                    return image;
-            }
-
-            Debug.LogWarning($"No image found for key '{key}'.", this);
-            return null;
-        }
-
-        static StyleBackground ToBackground(Texture2D texture) =>
-            texture != null ? new StyleBackground(texture) : new StyleBackground(StyleKeyword.None);
     }
 }
