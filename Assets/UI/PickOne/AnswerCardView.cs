@@ -21,8 +21,6 @@ namespace ExamCards.UI
         const string DimmedClass = "answer-card--dimmed";
         const string HiddenClass = "is-hidden";
 
-        static readonly string[] Letters = { "A", "B", "C", "D", "E", "F" };
-
         readonly VisualElement _card;
         readonly Label _keyLabel;
         readonly Label _letterBadge;
@@ -47,7 +45,7 @@ namespace ExamCards.UI
             root.Q<Button>("selectButton").clicked += () => Selected?.Invoke(Index);
 
             _keyLabel.text = $"Key [{index + 1}]";
-            _letterBadge.text = Letters[index % Letters.Length];
+            _letterBadge.text = ((char)('A' + index)).ToString();
         }
 
         public event Action<int> Selected;
@@ -75,6 +73,7 @@ namespace ExamCards.UI
             {
                 AnswerCardState.Correct => "Correct!",
                 AnswerCardState.Wrong => "Wrong",
+                AnswerCardState.Dimmed => "Not Selected",
                 _ => $"Select Card [{Index + 1}]",
             };
         }

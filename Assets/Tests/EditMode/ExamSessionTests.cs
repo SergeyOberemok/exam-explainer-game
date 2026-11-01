@@ -80,6 +80,66 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void MoveNext_Unanswered_Throws()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(1) });
+
+            Assert.Throws<InvalidOperationException>(() => session.MoveNext());
+            Assert.AreEqual(0, session.CurrentIndex);
+        }
+
+        [Test]
+        public void MoveNext_PastLastQuestion_FinishesExam()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0) });
+            session.Answer(0);
+            Assert.IsFalse(session.IsFinished);
+
+            Assert.IsFalse(session.MoveNext());
+
+            Assert.IsTrue(session.IsFinished);
+        }
+
+        [Test]
+        public void AnsweredIndex_TracksPickAndClearsOnNextQuestion()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(1) });
+            Assert.IsNull(session.AnsweredIndex);
+
+            session.Answer(3);
+            Assert.AreEqual(3, session.AnsweredIndex);
+
+            session.MoveNext();
+            Assert.IsNull(session.AnsweredIndex);
+        }
+
+        [Test]
+        public void AnsweredCount_CountsTheCurrentQuestionOnceAnswered()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(1) });
+            Assert.AreEqual(0, session.AnsweredCount);
+
+            session.Answer(0);
+            Assert.AreEqual(1, session.AnsweredCount);
+
+            session.MoveNext();
+            Assert.AreEqual(1, session.AnsweredCount);
+
+            session.Answer(1);
+            Assert.AreEqual(2, session.AnsweredCount);
+        }
+
+        [Test]
+        public void Reveal_AfterFinished_ReturnsFalse()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0) });
+            session.Answer(0);
+            session.MoveNext();
+
+            Assert.IsFalse(session.Reveal());
+        }
+
+        [Test]
         public void Constructor_EmptyList_Throws()
         {
             Assert.Throws<ArgumentException>(() => new ExamSession(Array.Empty<Question>()));

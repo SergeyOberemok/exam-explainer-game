@@ -19,7 +19,6 @@ namespace ExamCards.Exam
     public sealed class ExamSession
     {
         readonly IReadOnlyList<Question> _questions;
-        bool _currentAnswered;
 
         public ExamSession(IReadOnlyList<Question> questions)
         {
@@ -32,8 +31,18 @@ namespace ExamCards.Exam
         public int Total => _questions.Count;
         public int Score { get; private set; }
         public Question Current => _questions[CurrentIndex];
-        public bool IsCurrentAnswered => _currentAnswered;
+
+        /// <summary>The option picked for the current question, or null if it hasn't been answered.</summary>
+        public int? AnsweredIndex { get; private set; }
+
+        public bool IsCurrentAnswered => AnsweredIndex.HasValue;
         public bool IsCurrentRevealed { get; private set; }
+
+        /// <summary>True once <see cref="MoveNext"/> has been called on the last question.</summary>
+        public bool IsFinished { get; private set; }
+
+        /// <summary>How many questions have been answered so far, including the current one.</summary>
+        public int AnsweredCount => CurrentIndex + (IsCurrentAnswered ? 1 : 0);
 
         /// <summary>The text to display: the simplified version once revealed, otherwise the original.</summary>
         public QuestionPrompt CurrentPrompt => IsCurrentRevealed ? Current.Simplified : Current.Original;
@@ -43,10 +52,10 @@ namespace ExamCards.Exam
             var question = Current;
             if (optionIndex < 0 || optionIndex >= question.Original.Answers.Count)
                 throw new ArgumentOutOfRangeException(nameof(optionIndex));
-            if (_currentAnswered)
+            if (IsCurrentAnswered)
                 throw new InvalidOperationException("The current question has already been answered.");
 
-            _currentAnswered = true;
+            AnsweredIndex = optionIndex;
             var isCorrect = optionIndex == question.CorrectIndex;
             if (isCorrect)
                 Score++;
@@ -56,7 +65,7 @@ namespace ExamCards.Exam
         /// <summary>Switches the current question to its simplified text. Returns false if nothing changed.</summary>
         public bool Reveal()
         {
-            if (IsCurrentRevealed || !Current.CanReveal)
+            if (IsFinished || IsCurrentRevealed || !Current.CanReveal)
                 return false;
             IsCurrentRevealed = true;
             return true;
@@ -65,10 +74,16 @@ namespace ExamCards.Exam
         /// <summary>Advances to the next question. Returns false when the exam is over.</summary>
         public bool MoveNext()
         {
+            if (!IsCurrentAnswered)
+                throw new InvalidOperationException("The current question has not been answered.");
             if (CurrentIndex + 1 >= _questions.Count)
+            {
+                IsFinished = true;
                 return false;
+            }
+
             CurrentIndex++;
-            _currentAnswered = false;
+            AnsweredIndex = null;
             IsCurrentRevealed = false;
             return true;
         }

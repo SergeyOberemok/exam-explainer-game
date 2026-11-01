@@ -118,6 +118,7 @@
                         </ui:VisualElement>
                         <ui:Button name="revealButton" text="Reveal Simplified [R]" focusable="false" class="action-button" />
                         <ui:Button name="nextButton" text="Next Question" focusable="false" class="action-button action-button--primary is-hidden" />
+                        <ui:Button name="retryButton" text="Retry [Enter]" focusable="false" class="action-button action-button--primary is-hidden" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>
@@ -131,7 +132,7 @@
                     <ui:Label name="resultsScore" text="You scored 0 / 0" class="results__score" />
                     <ui:VisualElement class="results__button-wrap brutal brutal--s3">
                         <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
-                        <ui:Button name="playAgainButton" text="Play Again" class="primary-button" />
+                        <ui:Button name="playAgainButton" text="Play Again [Enter]" focusable="false" class="primary-button" />
                     </ui:VisualElement>
                 </ui:VisualElement>
             </ui:VisualElement>

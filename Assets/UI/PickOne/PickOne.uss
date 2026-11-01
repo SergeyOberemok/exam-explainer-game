@@ -514,6 +514,12 @@
     opacity: 0.8;
 }
 
+.answer-card--correct .icon--select,
+.answer-card--wrong .icon--select,
+.answer-card--dimmed .icon--select {
+    display: none;
+}
+
 /* ---------- bottom HUD ---------- */
 
 .hud-section {

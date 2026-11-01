@@ -12,16 +12,17 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player sees exam qu
   - `ExamItem` / `QuestionPrompt` mirror a document in the `examination` or `examination_simplified` collection. `QuestionAssembler.Build` joins them (`question_id` is a string holding the original's `_id`), converts the correct letter to an index, and throws on inconsistent data, naming the question.
   - `Question` is the playable model: `Original`, optional `Simplified`, and `CorrectIndex`, which is the same for both versions.
   - `IQuestionService` is the question source. `QuestionServices.Create()` picks it: `Factory` if set, otherwise `MockQuestionService`, which also serves tests and player builds. A real API service should implement the same interface.
-  - `ExamSession` walks the questions and keeps the score: `Answer(index)` returns an `AnswerResult`, `Reveal()` switches `CurrentPrompt` to the simplified text until the next question and doesn't affect the score, and `MoveNext()` returns false at the end.
+  - `ExamSession` walks the questions and keeps the score: `Answer(index)` returns an `AnswerResult` and records `AnsweredIndex`, `Reveal()` switches `CurrentPrompt` to the simplified text until the next question and doesn't affect the score, and `MoveNext()` throws if the current question is unanswered, and returns false and sets `IsFinished` at the end.
+  - A question has at most `Question.MaxAnswers` (4) answers, which `QuestionAssembler` enforces, because the screen has one key per answer.
 - **MongoDB — `Assets/Scripts/Exam.Mongo/`** (asmdef `ExamCards.Exam.Mongo`, **Editor only**):
-  - `MongoQuestionService` reads `DATABASE_URL` from the git-ignored `.env` in the project root and registers itself as `QuestionServices.Factory` on load.
+  - `MongoQuestionService` reads `DATABASE_URL` from the git-ignored `.env` in the project root and registers itself as `QuestionServices.Factory` on load. Without a `.env` it doesn't register, so the Editor uses the mock.
   - The driver DLLs are in `Assets/Plugins/MongoDB/` (MongoDB.Driver 3.13.0 and dependencies, `netstandard` builds from NuGet), set to Editor only and explicitly referenced. Together these keep the driver and the credentials out of player builds, so **never ship them or make them available on other platforms**.
   - The connection pins TLS 1.2. Under TLS 1.3, UnityTLS fails the Atlas handshake with "Cannot request client certificate before receiving one from the server".
   - The first load after a domain reload can be slow if the machine's primary DNS server doesn't answer `mongodb+srv` SRV lookups. Keep the driver's default 30s server selection timeout.
 - **UI — `Assets/UI/PickOne/`** (lives in Assembly-CSharp):
   - `PickOne.uxml` is the whole screen. `AnswerCard.uxml` is the per-answer card template, instantiated from code into `cardsRow`.
   - `PickOne.uss` holds all styles. The palette lives as `:root` variables.
-  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) loads questions and handles card picks (click or keys 1–4), Reveal (click or R) and Next (click, Enter or Space), then shows the results overlay. `RenderPrompt()` draws the current text and state, and runs for a new question, an answer and a reveal.
+  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) loads questions and handles card picks (click or keys 1–4), Reveal (click or R), and Next, Play Again and Retry (click, Enter or Space), then shows the results overlay. A failed or empty load shows a message and the Retry button. `RenderPrompt()` draws the current text and state, and runs for a new question, an answer and a reveal.
   - `AnswerCardView` binds one card's text and switches state only through USS classes (`answer-card--interactive|correct|wrong|dimmed`). `Bind` doesn't touch state, so a reveal keeps a card's result colours.
   - `GradientElement` is a `[UxmlElement]` that draws gradients with vertex colors, because USS has no gradients.
   - Header nav, coins, timer, lives, streak and the three power-ups are **static placeholders**; they are not wired up yet.

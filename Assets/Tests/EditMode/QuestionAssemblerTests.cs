@@ -122,6 +122,40 @@ namespace ExamCards.Exam.Tests
             StringAssert.Contains("bad-id", error.Message);
         }
 
+        [TestCase(null)]
+        [TestCase("")]
+        public void Build_SimplifiedWithoutQuestionId_ThrowsNamingItem(string questionId)
+        {
+            var simplified = Simplified("1");
+            simplified.Id = "bad-id";
+            simplified.QuestionId = questionId;
+
+            var error = Assert.Throws<FormatException>(() => QuestionAssembler.Build(new[] { Original("1") }, new[] { simplified }));
+
+            StringAssert.Contains("bad-id", error.Message);
+        }
+
+        [Test]
+        public void Build_SimplifiedWithNoOriginal_ThrowsNamingQuestion()
+        {
+            var error = Assert.Throws<FormatException>(() =>
+                QuestionAssembler.Build(new[] { Original("1") }, new[] { Simplified("1"), Simplified("bad-id") }));
+
+            StringAssert.Contains("bad-id", error.Message);
+        }
+
+        [Test]
+        public void Build_MoreAnswersThanSupported_ThrowsNamingQuestion()
+        {
+            var item = Original("bad-id");
+            item.Prompt.Answers = new[] { "a", "b", "c", "d", "e" };
+            item.Prompt.Feedbacks = new[] { "fa", "fb", "fc", "fd", "fe" };
+
+            var error = Assert.Throws<FormatException>(() => QuestionAssembler.Build(new[] { item }, Array.Empty<ExamItem>()));
+
+            StringAssert.Contains("bad-id", error.Message);
+        }
+
         [Test]
         public void Build_DuplicateSimplified_Throws()
         {

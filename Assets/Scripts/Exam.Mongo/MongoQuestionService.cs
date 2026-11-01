@@ -23,8 +23,16 @@ namespace ExamCards.Exam.Mongo
         const string SimplifiedCollection = "examination_simplified";
         const string UrlKey = "DATABASE_URL";
 
+        static string EnvPath => Path.Combine(Path.GetDirectoryName(Application.dataPath), ".env");
+
         [InitializeOnLoadMethod]
-        static void Register() => QuestionServices.Factory = () => new MongoQuestionService();
+        static void Register()
+        {
+            if (File.Exists(EnvPath))
+                QuestionServices.Factory = () => new MongoQuestionService();
+            else
+                Debug.Log($"No .env in the project root, so the Editor is using mock questions. Define {UrlKey} there to use MongoDB.");
+        }
 
         public async Task<IReadOnlyList<Question>> GetQuestionsAsync(CancellationToken cancellationToken = default)
         {
@@ -56,35 +64,43 @@ namespace ExamCards.Exam.Mongo
                 .Find(FilterDefinition<BsonDocument>.Empty)
                 .Sort(Builders<BsonDocument>.Sort.Ascending("_id"))
                 .ToListAsync(cancellationToken);
-            return documents.Select(ToExamItem).ToList();
+            return documents.Select(document => ToExamItem(collection, document)).ToList();
         }
 
-        static ExamItem ToExamItem(BsonDocument document)
+        static ExamItem ToExamItem(string collection, BsonDocument document)
         {
-            var prompt = document["prompt"].AsBsonDocument;
-            return new ExamItem
+            try
             {
-                Id = document["_id"].ToString(),
-                QuestionId = document.GetValue("question_id", BsonNull.Value).IsString ? document["question_id"].AsString : null,
-                Section = document["section"].AsString,
-                Source = document["source"].AsString,
-                CorrectResponse = ToStrings(document["correct_response"]),
-                Prompt = new QuestionPrompt
+                var prompt = document["prompt"].AsBsonDocument;
+                var isOriginal = collection == OriginalsCollection;
+                return new ExamItem
                 {
-                    Question = prompt["question"].AsString,
-                    Answers = ToStrings(prompt["answers"]),
-                    Feedbacks = ToStrings(prompt["feedbacks"]),
-                    Explanation = prompt["explanation"].AsString,
-                },
-            };
+                    Id = document["_id"].ToString(),
+                    QuestionId = document.GetValue("question_id", BsonNull.Value).IsString ? document["question_id"].AsString : null,
+                    // Only originals use these; the joined question takes them from its original.
+                    Section = isOriginal ? document["section"].AsString : null,
+                    Source = isOriginal ? document["source"].AsString : null,
+                    CorrectResponse = ToStrings(document["correct_response"]),
+                    Prompt = new QuestionPrompt
+                    {
+                        Question = prompt["question"].AsString,
+                        Answers = ToStrings(prompt["answers"]),
+                        Feedbacks = ToStrings(prompt["feedbacks"]),
+                        Explanation = prompt["explanation"].AsString,
+                    },
+                };
+            }
+            catch (Exception e) when (e is KeyNotFoundException || e is InvalidCastException)
+            {
+                throw new FormatException($"{collection} document {document.GetValue("_id", "(no _id)")}: {e.Message}", e);
+            }
         }
 
         static string[] ToStrings(BsonValue array) => array.AsBsonArray.Select(value => value.AsString).ToArray();
 
         static string ReadDatabaseUrl()
         {
-            var projectRoot = Path.GetDirectoryName(Application.dataPath);
-            var path = Path.Combine(projectRoot, ".env");
+            var path = EnvPath;
             if (!File.Exists(path))
                 throw new FileNotFoundException($"No .env file in the project root; it must define {UrlKey}.", path);
 

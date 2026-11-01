@@ -10,18 +10,21 @@ namespace ExamCards.UI
 {
     /// <summary>
     /// Drives the PickOne screen: loads questions from the question service, shows them one by one,
-    /// and handles card picks (click or keys 1-4), Reveal (click or R), Next (click, Enter or Space)
-    /// and the final score.
+    /// and handles card picks (click or keys 1-4), Reveal (click or R), Next, Play Again and Retry
+    /// (click, Enter or Space) and the final score.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PickOneScreen : MonoBehaviour
     {
         const string HiddenClass = "is-hidden";
         const string ResultsHiddenClass = "results--hidden";
-        const int NoAnswer = -1;
+        const string LoadingText = "Loading question…";
+        const string LoadFailedText = "Could not load questions.";
+        const string NoQuestionsText = "No questions are available.";
 
         [SerializeField] VisualTreeAsset _answerCardTemplate;
 
+        // One key per answer, up to Question.MaxAnswers.
         static readonly Key[] DigitKeys = { Key.Digit1, Key.Digit2, Key.Digit3, Key.Digit4 };
         static readonly Key[] NumpadKeys = { Key.Numpad1, Key.Numpad2, Key.Numpad3, Key.Numpad4 };
         static readonly Key[] NextKeys = { Key.Enter, Key.NumpadEnter, Key.Space };
@@ -31,8 +34,7 @@ namespace ExamCards.UI
         IReadOnlyList<Question> _questions;
         ExamSession _session;
         CancellationTokenSource _loadCancellation;
-        int _answeredIndex = NoAnswer;
-        bool _examFinished;
+        bool _loadFailed;
 
         Label _categoryLabel;
         VisualElement _simplifiedBadge;
@@ -46,6 +48,7 @@ namespace ExamCards.UI
         VisualElement _cardsRow;
         Button _revealButton;
         Button _nextButton;
+        Button _retryButton;
         VisualElement _resultsOverlay;
         Label _resultsScore;
         Button _playAgainButton;
@@ -67,14 +70,17 @@ namespace ExamCards.UI
             _cardsRow = root.Q("cardsRow");
             _revealButton = root.Q<Button>("revealButton");
             _nextButton = root.Q<Button>("nextButton");
+            _retryButton = root.Q<Button>("retryButton");
             _resultsOverlay = root.Q("resultsOverlay");
             _resultsScore = root.Q<Label>("resultsScore");
             _playAgainButton = root.Q<Button>("playAgainButton");
 
             _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
+            _retryButton.clicked += LoadQuestions;
             _playAgainButton.clicked += StartExam;
             _revealButton.SetEnabled(false);
+            _resultsOverlay.AddToClassList(ResultsHiddenClass);
             _cardsRow.Clear();
             _cards.Clear();
 
@@ -91,6 +97,8 @@ namespace ExamCards.UI
                 _revealButton.clicked -= OnRevealPressed;
             if (_nextButton != null)
                 _nextButton.clicked -= OnNextPressed;
+            if (_retryButton != null)
+                _retryButton.clicked -= LoadQuestions;
             if (_playAgainButton != null)
                 _playAgainButton.clicked -= StartExam;
         }
@@ -98,8 +106,22 @@ namespace ExamCards.UI
         void Update()
         {
             var keyboard = Keyboard.current;
-            if (_session == null || _examFinished || keyboard == null)
+            if (keyboard == null)
                 return;
+
+            if (_session == null)
+            {
+                if (_loadFailed && WasNextKeyPressed(keyboard))
+                    LoadQuestions();
+                return;
+            }
+
+            if (_session.IsFinished)
+            {
+                if (WasNextKeyPressed(keyboard))
+                    StartExam();
+                return;
+            }
 
             if (keyboard[Key.R].wasPressedThisFrame)
             {
@@ -107,13 +129,10 @@ namespace ExamCards.UI
                 return;
             }
 
-            foreach (var key in NextKeys)
+            if (WasNextKeyPressed(keyboard))
             {
-                if (keyboard[key].wasPressedThisFrame)
-                {
-                    OnNextPressed();
-                    return;
-                }
+                OnNextPressed();
+                return;
             }
 
             for (var i = 0; i < DigitKeys.Length && i < _cards.Count; i++)
@@ -126,8 +145,22 @@ namespace ExamCards.UI
             }
         }
 
+        static bool WasNextKeyPressed(Keyboard keyboard)
+        {
+            foreach (var key in NextKeys)
+            {
+                if (keyboard[key].wasPressedThisFrame)
+                    return true;
+            }
+            return false;
+        }
+
         async void LoadQuestions()
         {
+            _loadFailed = false;
+            _retryButton.AddToClassList(HiddenClass);
+            _questionText.text = LoadingText;
+
             _loadCancellation?.Cancel();
             _loadCancellation?.Dispose();
             _loadCancellation = new CancellationTokenSource();
@@ -146,37 +179,42 @@ namespace ExamCards.UI
                 if (token.IsCancellationRequested)
                     return;
                 Debug.LogException(e, this);
-                _questionText.text = "Could not load questions.";
+                ShowLoadFailure(LoadFailedText);
                 return;
             }
 
             if (token.IsCancellationRequested)
                 return;
+
+            if (_questions.Count == 0)
+            {
+                Debug.LogWarning("The question service returned no questions.", this);
+                ShowLoadFailure(NoQuestionsText);
+                return;
+            }
+
             StartExam();
+        }
+
+        void ShowLoadFailure(string message)
+        {
+            _loadFailed = true;
+            _questionText.text = message;
+            _retryButton.RemoveFromClassList(HiddenClass);
         }
 
         void StartExam()
         {
-            if (_questions == null || _questions.Count == 0)
-                return;
             _session = new ExamSession(_questions);
-            _examFinished = false;
             _resultsOverlay.AddToClassList(ResultsHiddenClass);
             ShowCurrentQuestion();
         }
 
         void ShowCurrentQuestion()
         {
-            _answeredIndex = NoAnswer;
-
             var question = _session.Current;
             _categoryLabel.text = question.Section?.ToUpperInvariant();
-
-            var number = _session.CurrentIndex + 1;
-            var percent = Mathf.RoundToInt(100f * number / _session.Total);
-            _progressLabel.text = $"Question {number} of {_session.Total}";
-            _progressPercent.text = $"{percent}%";
-            _progressFill.style.width = Length.Percent(percent);
+            _progressLabel.text = $"Question {_session.CurrentIndex + 1} of {_session.Total}";
 
             EnsureCardCount(question.Original.Answers.Count);
             RenderPrompt();
@@ -188,6 +226,10 @@ namespace ExamCards.UI
             var question = _session.Current;
             var prompt = _session.CurrentPrompt;
             var answered = _session.IsCurrentAnswered;
+
+            var percent = Mathf.RoundToInt(100f * _session.AnsweredCount / _session.Total);
+            _progressPercent.text = $"{percent}%";
+            _progressFill.style.width = Length.Percent(percent);
 
             _questionText.text = prompt.Question;
             _explanationText.text = prompt.Explanation;
@@ -212,11 +254,11 @@ namespace ExamCards.UI
 
         AnswerCardState GetCardState(int index, int correctIndex)
         {
-            if (_answeredIndex == NoAnswer)
+            if (!_session.IsCurrentAnswered)
                 return AnswerCardState.Interactive;
             if (index == correctIndex)
                 return AnswerCardState.Correct;
-            return index == _answeredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
+            return index == _session.AnsweredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
         }
 
         void ScrollQuestionPanel(bool toExplanation)
@@ -255,17 +297,16 @@ namespace ExamCards.UI
 
         void OnCardSelected(int index)
         {
-            if (_session == null || _examFinished || _session.IsCurrentAnswered)
+            if (_session == null || _session.IsFinished || _session.IsCurrentAnswered)
                 return;
 
             _session.Answer(index);
-            _answeredIndex = index;
             RenderPrompt();
         }
 
         void OnRevealPressed()
         {
-            if (_session == null || _examFinished)
+            if (_session == null)
                 return;
             if (_session.Reveal())
                 RenderPrompt();
@@ -273,7 +314,7 @@ namespace ExamCards.UI
 
         void OnNextPressed()
         {
-            if (_session == null || _examFinished || !_session.IsCurrentAnswered)
+            if (_session == null || _session.IsFinished || !_session.IsCurrentAnswered)
                 return;
 
             if (_session.MoveNext())
@@ -284,7 +325,6 @@ namespace ExamCards.UI
 
         void ShowResults()
         {
-            _examFinished = true;
             _resultsScore.text = $"You scored {_session.Score} / {_session.Total}";
             _resultsOverlay.RemoveFromClassList(ResultsHiddenClass);
         }

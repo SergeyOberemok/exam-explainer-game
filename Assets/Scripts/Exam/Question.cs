@@ -6,6 +6,9 @@ namespace ExamCards.Exam
     [Serializable]
     public sealed class Question
     {
+        /// <summary>The most answers a question can have; the screen has one letter and one key for each.</summary>
+        public const int MaxAnswers = 4;
+
         public string Id { get; set; }
         public string Section { get; set; }
         public string Source { get; set; }
