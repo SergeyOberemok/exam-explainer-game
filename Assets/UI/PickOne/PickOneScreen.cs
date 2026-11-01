@@ -46,6 +46,8 @@ namespace ExamCards.UI
         Label _progressPercent;
         VisualElement _progressFill;
         VisualElement _cardsRow;
+        VisualElement _fiftyFiftyButton;
+        Label _fiftyFiftyCount;
         Button _revealButton;
         Button _nextButton;
         Button _retryButton;
@@ -68,6 +70,8 @@ namespace ExamCards.UI
             _progressPercent = root.Q<Label>("progressPercent");
             _progressFill = root.Q("progressFill");
             _cardsRow = root.Q("cardsRow");
+            _fiftyFiftyButton = root.Q("fiftyFiftyButton");
+            _fiftyFiftyCount = root.Q<Label>("fiftyFiftyCount");
             _revealButton = root.Q<Button>("revealButton");
             _nextButton = root.Q<Button>("nextButton");
             _retryButton = root.Q<Button>("retryButton");
@@ -75,10 +79,12 @@ namespace ExamCards.UI
             _resultsScore = root.Q<Label>("resultsScore");
             _playAgainButton = root.Q<Button>("playAgainButton");
 
+            _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
             _retryButton.clicked += LoadQuestions;
             _playAgainButton.clicked += StartExam;
+            _fiftyFiftyButton.SetEnabled(false);
             _revealButton.SetEnabled(false);
             _resultsOverlay.AddToClassList(ResultsHiddenClass);
             _cardsRow.Clear();
@@ -93,6 +99,7 @@ namespace ExamCards.UI
             _loadCancellation?.Dispose();
             _loadCancellation = null;
             _session = null;
+            _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             if (_revealButton != null)
                 _revealButton.clicked -= OnRevealPressed;
             if (_nextButton != null)
@@ -126,6 +133,12 @@ namespace ExamCards.UI
             if (keyboard[Key.R].wasPressedThisFrame)
             {
                 OnRevealPressed();
+                return;
+            }
+
+            if (keyboard[Key.F].wasPressedThisFrame)
+            {
+                OnFiftyFiftyPressed();
                 return;
             }
 
@@ -242,6 +255,8 @@ namespace ExamCards.UI
                 _cards[i].SetState(GetCardState(i, question.CorrectIndex));
             }
 
+            _fiftyFiftyCount.text = _session.FiftyFiftyRemaining.ToString();
+            _fiftyFiftyButton.SetEnabled(_session.CanEliminate);
             _revealButton.SetEnabled(question.CanReveal && !_session.IsCurrentRevealed);
             _revealButton.text = _session.IsCurrentRevealed ? "Simplified Shown" : "Reveal Simplified [R]";
 
@@ -255,7 +270,7 @@ namespace ExamCards.UI
         AnswerCardState GetCardState(int index, int correctIndex)
         {
             if (!_session.IsCurrentAnswered)
-                return AnswerCardState.Interactive;
+                return _session.IsEliminated(index) ? AnswerCardState.Eliminated : AnswerCardState.Interactive;
             if (index == correctIndex)
                 return AnswerCardState.Correct;
             return index == _session.AnsweredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
@@ -297,11 +312,21 @@ namespace ExamCards.UI
 
         void OnCardSelected(int index)
         {
-            if (_session == null || _session.IsFinished || _session.IsCurrentAnswered)
+            if (_session == null || _session.IsFinished || _session.IsCurrentAnswered || _session.IsEliminated(index))
                 return;
 
             _session.Answer(index);
             RenderPrompt();
+        }
+
+        void OnFiftyFiftyClicked(ClickEvent evt) => OnFiftyFiftyPressed();
+
+        void OnFiftyFiftyPressed()
+        {
+            if (_session == null)
+                return;
+            if (_session.Eliminate())
+                RenderPrompt();
         }
 
         void OnRevealPressed()

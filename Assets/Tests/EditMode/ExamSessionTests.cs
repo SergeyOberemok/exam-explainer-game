@@ -229,5 +229,88 @@ namespace ExamCards.Exam.Tests
             Assert.IsFalse(session.IsCurrentRevealed);
             Assert.AreSame(question.Original, session.CurrentPrompt);
         }
+
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        [TestCase(3)]
+        public void Eliminate_RemovesTwoWrongAnswersAndKeepsTheCorrectOne(int correctIndex)
+        {
+            for (var seed = 0; seed < 20; seed++)
+            {
+                var session = new ExamSession(new[] { MakeQuestion(correctIndex) }, new Random(seed));
+
+                Assert.IsTrue(session.Eliminate());
+
+                var eliminated = 0;
+                for (var i = 0; i < 4; i++)
+                    eliminated += session.IsEliminated(i) ? 1 : 0;
+                Assert.AreEqual(2, eliminated);
+                Assert.IsFalse(session.IsEliminated(correctIndex));
+            }
+        }
+
+        [Test]
+        public void Eliminate_UsesACharge_AndWorksOncePerQuestion()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(0) });
+            Assert.AreEqual(2, session.FiftyFiftyRemaining);
+
+            Assert.IsTrue(session.Eliminate());
+            Assert.AreEqual(1, session.FiftyFiftyRemaining);
+            Assert.IsFalse(session.Eliminate());
+            Assert.AreEqual(1, session.FiftyFiftyRemaining);
+        }
+
+        [Test]
+        public void Eliminate_RunsOutOfCharges()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(0) }, fiftyFiftyCharges: 1);
+            session.Eliminate();
+            session.Answer(0);
+            session.MoveNext();
+
+            Assert.IsFalse(session.CanEliminate);
+            Assert.IsFalse(session.Eliminate());
+        }
+
+        [Test]
+        public void Eliminate_AfterAnswering_ReturnsFalse()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0) });
+            session.Answer(0);
+
+            Assert.IsFalse(session.Eliminate());
+            Assert.AreEqual(2, session.FiftyFiftyRemaining);
+        }
+
+        [Test]
+        public void Answer_EliminatedOption_Throws()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0) }, new Random(1));
+            session.Eliminate();
+            var eliminated = -1;
+            for (var i = 0; i < 4; i++)
+            {
+                if (session.IsEliminated(i))
+                    eliminated = i;
+            }
+
+            Assert.Throws<InvalidOperationException>(() => session.Answer(eliminated));
+        }
+
+        [Test]
+        public void MoveNext_ClearsEliminatedAnswers()
+        {
+            var session = new ExamSession(new[] { MakeQuestion(0), MakeQuestion(0) });
+            session.Eliminate();
+            session.Answer(0);
+
+            session.MoveNext();
+
+            Assert.IsFalse(session.IsCurrentEliminated);
+            for (var i = 0; i < 4; i++)
+                Assert.IsFalse(session.IsEliminated(i));
+        }
     }
 }

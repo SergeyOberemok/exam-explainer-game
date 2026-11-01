@@ -591,6 +591,23 @@
     border-color: var(--ink);
 }
 
+.powerup--button:hover {
+    background-color: var(--sand);
+}
+
+.powerup--button:disabled {
+    background-color: var(--cream);
+    opacity: 0.6;
+}
+
+.answer-card--eliminated {
+    opacity: 0.35;
+}
+
+.answer-card--eliminated .icon--select {
+    display: none;
+}
+
 .action-button {
     height: 40px;
     padding: 0 14px;

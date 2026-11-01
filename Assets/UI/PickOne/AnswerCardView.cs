@@ -10,6 +10,7 @@ namespace ExamCards.UI
         Correct,
         Wrong,
         Dimmed,
+        Eliminated,
     }
 
     /// <summary>Binds one AnswerCard.uxml instance to the text of one answer.</summary>
@@ -19,6 +20,7 @@ namespace ExamCards.UI
         const string CorrectClass = "answer-card--correct";
         const string WrongClass = "answer-card--wrong";
         const string DimmedClass = "answer-card--dimmed";
+        const string EliminatedClass = "answer-card--eliminated";
         const string HiddenClass = "is-hidden";
 
         readonly VisualElement _card;
@@ -67,10 +69,13 @@ namespace ExamCards.UI
             _card.EnableInClassList(CorrectClass, state == AnswerCardState.Correct);
             _card.EnableInClassList(WrongClass, state == AnswerCardState.Wrong);
             _card.EnableInClassList(DimmedClass, state == AnswerCardState.Dimmed);
-            _feedbackText.EnableInClassList(HiddenClass, state == AnswerCardState.Interactive);
+            _card.EnableInClassList(EliminatedClass, state == AnswerCardState.Eliminated);
+            _feedbackText.EnableInClassList(HiddenClass,
+                state == AnswerCardState.Interactive || state == AnswerCardState.Eliminated);
 
             _selectLabel.text = state switch
             {
+                AnswerCardState.Eliminated => "Eliminated",
                 AnswerCardState.Correct => "Correct!",
                 AnswerCardState.Wrong => "Wrong",
                 AnswerCardState.Dimmed => "Not Selected",

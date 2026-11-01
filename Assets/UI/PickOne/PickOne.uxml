@@ -95,11 +95,11 @@
                         </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:VisualElement class="hud__group">
-                        <ui:VisualElement class="powerup">
+                        <ui:VisualElement name="fiftyFiftyButton" class="powerup powerup--button">
                             <ui:VisualElement class="icon icon--fifty" />
-                            <ui:Label text="50/50 Eliminate" class="powerup__text" />
+                            <ui:Label text="50/50 Eliminate [F]" class="powerup__text" />
                             <ui:VisualElement class="chip chip--pink powerup__count">
-                                <ui:Label text="2" class="chip__text" />
+                                <ui:Label name="fiftyFiftyCount" text="2" class="chip__text" />
                             </ui:VisualElement>
                         </ui:VisualElement>
                         <ui:VisualElement class="powerup">

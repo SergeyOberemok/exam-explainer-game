@@ -18,13 +18,66 @@ namespace ExamCards.Exam
     /// <summary>Walks through a list of questions one by one and keeps the score.</summary>
     public sealed class ExamSession
     {
-        readonly IReadOnlyList<Question> _questions;
+        /// <summary>How many wrong answers a 50/50 removes.</summary>
+        public const int EliminatedPerUse = 2;
 
-        public ExamSession(IReadOnlyList<Question> questions)
+        /// <summary>How many 50/50 uses an exam starts with.</summary>
+        public const int DefaultFiftyFiftyCharges = 2;
+
+        readonly IReadOnlyList<Question> _questions;
+        readonly Random _random;
+        readonly HashSet<int> _eliminated = new HashSet<int>();
+
+        public ExamSession(IReadOnlyList<Question> questions, Random random = null,
+            int fiftyFiftyCharges = DefaultFiftyFiftyCharges)
         {
             _questions = questions ?? throw new ArgumentNullException(nameof(questions));
             if (_questions.Count == 0)
                 throw new ArgumentException("An exam needs at least one question.", nameof(questions));
+            if (fiftyFiftyCharges < 0)
+                throw new ArgumentOutOfRangeException(nameof(fiftyFiftyCharges));
+            _random = random ?? new Random();
+            FiftyFiftyRemaining = fiftyFiftyCharges;
+        }
+
+        /// <summary>How many 50/50 uses are left in this exam.</summary>
+        public int FiftyFiftyRemaining { get; private set; }
+
+        /// <summary>True if the current question has had its wrong answers removed.</summary>
+        public bool IsCurrentEliminated => _eliminated.Count > 0;
+
+        public bool IsEliminated(int optionIndex) => _eliminated.Contains(optionIndex);
+
+        /// <summary>True if 50/50 can be used on the current question right now.</summary>
+        public bool CanEliminate =>
+            !IsFinished && !IsCurrentAnswered && !IsCurrentEliminated && FiftyFiftyRemaining > 0
+            && Current.Original.Answers.Count - 1 >= EliminatedPerUse;
+
+        /// <summary>
+        /// Removes two random wrong answers from the current question and uses up one charge.
+        /// Returns false if nothing changed. The correct answer is never removed.
+        /// </summary>
+        public bool Eliminate()
+        {
+            if (!CanEliminate)
+                return false;
+
+            var wrong = new List<int>();
+            for (var i = 0; i < Current.Original.Answers.Count; i++)
+            {
+                if (i != Current.CorrectIndex)
+                    wrong.Add(i);
+            }
+
+            for (var n = 0; n < EliminatedPerUse; n++)
+            {
+                var pick = _random.Next(wrong.Count);
+                _eliminated.Add(wrong[pick]);
+                wrong.RemoveAt(pick);
+            }
+
+            FiftyFiftyRemaining--;
+            return true;
         }
 
         public int CurrentIndex { get; private set; }
@@ -54,6 +107,8 @@ namespace ExamCards.Exam
                 throw new ArgumentOutOfRangeException(nameof(optionIndex));
             if (IsCurrentAnswered)
                 throw new InvalidOperationException("The current question has already been answered.");
+            if (IsEliminated(optionIndex))
+                throw new InvalidOperationException("That answer was eliminated by 50/50.");
 
             AnsweredIndex = optionIndex;
             var isCorrect = optionIndex == question.CorrectIndex;
@@ -85,6 +140,7 @@ namespace ExamCards.Exam
             CurrentIndex++;
             AnsweredIndex = null;
             IsCurrentRevealed = false;
+            _eliminated.Clear();
             return true;
         }
     }

@@ -13,6 +13,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player sees exam qu
   - `Question` is the playable model: `Original`, optional `Simplified`, and `CorrectIndex`, which is the same for both versions.
   - `IQuestionService` is the question source. `QuestionServices.Create()` picks it: `Factory` if set, otherwise `MockQuestionService`, which also serves tests and player builds. A real API service should implement the same interface.
   - `ExamSession` walks the questions and keeps the score: `Answer(index)` returns an `AnswerResult` and records `AnsweredIndex`, `Reveal()` switches `CurrentPrompt` to the simplified text until the next question and doesn't affect the score, and `MoveNext()` throws if the current question is unanswered, and returns false and sets `IsFinished` at the end.
+  - **50/50:** `Eliminate()` removes two random wrong answers from the current unanswered question and uses one of the exam's `FiftyFiftyRemaining` charges (2 by default). It works once per question, and `Answer` throws for an eliminated option. Eliminated answers clear on `MoveNext()`.
   - A question has at most `Question.MaxAnswers` (4) answers, which `QuestionAssembler` enforces, because the screen has one key per answer.
 - **MongoDB — `Assets/Scripts/Exam.Mongo/`** (asmdef `ExamCards.Exam.Mongo`, **Editor only**):
   - `MongoQuestionService` reads `DATABASE_URL` from the git-ignored `.env` in the project root and registers itself as `QuestionServices.Factory` on load. Without a `.env` it doesn't register, so the Editor uses the mock.
@@ -25,7 +26,8 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player sees exam qu
   - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) loads questions and handles card picks (click or keys 1–4), Reveal (click or R), and Next, Play Again and Retry (click, Enter or Space), then shows the results overlay. A failed or empty load shows a message and the Retry button. `RenderPrompt()` draws the current text and state, and runs for a new question, an answer and a reveal.
   - `AnswerCardView` binds one card's text and switches state only through USS classes (`answer-card--interactive|correct|wrong|dimmed`). `Bind` doesn't touch state, so a reveal keeps a card's result colours.
   - `GradientElement` is a `[UxmlElement]` that draws gradients with vertex colors, because USS has no gradients.
-  - Header nav, coins, timer, lives, streak and the three power-ups are **static placeholders**; they are not wired up yet.
+  - The 50/50 power-up (`fiftyFiftyButton`, click or key F) is wired to `ExamSession.Eliminate()`; eliminated cards use the `answer-card--eliminated` state.
+  - Header nav, coins, timer, lives, streak and the other two power-ups (Freeze, Codex Lore) are **static placeholders**; they are not wired up yet.
 - **Scene setup**: the menu **Tools ▸ ExamCards ▸ Setup PickOne Scene** (`Assets/Editor/PickOneSceneSetup.cs`) creates `Assets/UI/PanelSettings.asset` (uses theme `Assets/UI/ExamTheme.tss`, scale-with-screen 1280×1024) and wires the `PickOneUI` GameObject into `SampleScene`. Re-run it after changing serialized references instead of editing the scene YAML.
 
 ## UI Toolkit conventions in this project
