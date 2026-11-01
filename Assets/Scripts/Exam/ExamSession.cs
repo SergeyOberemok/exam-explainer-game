@@ -24,6 +24,9 @@ namespace ExamCards.Exam
         /// <summary>How many 50/50 uses an exam starts with.</summary>
         public const int DefaultFiftyFiftyCharges = 2;
 
+        /// <summary>How many lives an exam starts with. Each wrong answer costs one.</summary>
+        public const int MaxLives = 3;
+
         readonly IReadOnlyList<Question> _questions;
         readonly Random _random;
         readonly HashSet<int> _eliminated = new HashSet<int>();
@@ -80,6 +83,9 @@ namespace ExamCards.Exam
             return true;
         }
 
+        /// <summary>Lives left. The exam ends after the current question when this reaches 0.</summary>
+        public int Lives { get; private set; } = MaxLives;
+
         public int CurrentIndex { get; private set; }
         public int Total => _questions.Count;
         public int Score { get; private set; }
@@ -114,6 +120,8 @@ namespace ExamCards.Exam
             var isCorrect = optionIndex == question.CorrectIndex;
             if (isCorrect)
                 Score++;
+            else
+                Lives--;
             return new AnswerResult(isCorrect, question.CorrectIndex);
         }
 
@@ -131,7 +139,7 @@ namespace ExamCards.Exam
         {
             if (!IsCurrentAnswered)
                 throw new InvalidOperationException("The current question has not been answered.");
-            if (CurrentIndex + 1 >= _questions.Count)
+            if (Lives <= 0 || CurrentIndex + 1 >= _questions.Count)
             {
                 IsFinished = true;
                 return false;

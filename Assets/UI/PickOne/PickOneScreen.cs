@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using ExamCards.Exam;
 using UnityEngine;
@@ -55,6 +56,7 @@ namespace ExamCards.UI
         Label _resultsScore;
         Button _playAgainButton;
         VisualElement _exitButton;
+        List<VisualElement> _hearts;
 
         static void OnExitClicked(ClickEvent evt)
         {
@@ -90,6 +92,7 @@ namespace ExamCards.UI
             _playAgainButton = root.Q<Button>("playAgainButton");
 
             _exitButton = root.Q("exitButton");
+            _hearts = root.Q("hearts").Children().ToList();
 
             _exitButton.RegisterCallback<ClickEvent>(OnExitClicked);
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
@@ -269,12 +272,15 @@ namespace ExamCards.UI
                 _cards[i].SetState(GetCardState(i, question.CorrectIndex));
             }
 
+            for (var i = 0; i < _hearts.Count; i++)
+                _hearts[i].EnableInClassList("icon--heart-used", i >= _session.Lives);
+
             _fiftyFiftyCount.text = _session.FiftyFiftyRemaining.ToString();
             _fiftyFiftyButton.SetEnabled(_session.CanEliminate);
             _revealButton.SetEnabled(question.CanReveal && !_session.IsCurrentRevealed);
             _revealButton.text = _session.IsCurrentRevealed ? "Simplified Shown" : "Reveal Simplified [R]";
 
-            var isLast = _session.CurrentIndex + 1 >= _session.Total;
+            var isLast = _session.CurrentIndex + 1 >= _session.Total || _session.Lives <= 0;
             _nextButton.text = isLast ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
 
@@ -364,7 +370,8 @@ namespace ExamCards.UI
 
         void ShowResults()
         {
-            _resultsScore.text = $"You scored {_session.Score} / {_session.Total}";
+            var outOfLives = _session.Lives <= 0;
+            _resultsScore.text = $"{(outOfLives ? "Out of lives! " : "")}You scored {_session.Score} / {_session.Total}";
             _resultsOverlay.RemoveFromClassList(ResultsHiddenClass);
         }
     }

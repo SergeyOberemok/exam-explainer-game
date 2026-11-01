@@ -86,7 +86,7 @@
                     <ui:VisualElement class="hud__group">
                         <ui:VisualElement class="badge">
                             <ui:Label text="LIVES" class="badge__label" />
-                            <ui:VisualElement class="hearts">
+                            <ui:VisualElement name="hearts" class="hearts">
                                 <ui:VisualElement class="icon icon--heart" />
                                 <ui:VisualElement class="icon icon--heart" />
                                 <ui:VisualElement class="icon icon--heart" />
