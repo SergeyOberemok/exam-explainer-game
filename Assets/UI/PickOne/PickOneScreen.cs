@@ -54,6 +54,16 @@ namespace ExamCards.UI
         VisualElement _resultsOverlay;
         Label _resultsScore;
         Button _playAgainButton;
+        VisualElement _exitButton;
+
+        static void OnExitClicked(ClickEvent evt)
+        {
+#if UNITY_EDITOR
+            UnityEditor.EditorApplication.isPlaying = false;
+#else
+            Application.Quit();
+#endif
+        }
 
         void OnEnable()
         {
@@ -79,6 +89,9 @@ namespace ExamCards.UI
             _resultsScore = root.Q<Label>("resultsScore");
             _playAgainButton = root.Q<Button>("playAgainButton");
 
+            _exitButton = root.Q("exitButton");
+
+            _exitButton.RegisterCallback<ClickEvent>(OnExitClicked);
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
@@ -99,6 +112,7 @@ namespace ExamCards.UI
             _loadCancellation?.Dispose();
             _loadCancellation = null;
             _session = null;
+            _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             if (_revealButton != null)
                 _revealButton.clicked -= OnRevealPressed;

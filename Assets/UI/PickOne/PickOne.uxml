@@ -49,6 +49,9 @@
                 <ui:VisualElement class="icon-button icon-button--brand">
                     <ui:VisualElement class="icon icon--profile" />
                 </ui:VisualElement>
+                <ui:VisualElement name="exitButton" class="icon-button icon-button--exit">
+                    <ui:VisualElement class="icon icon--exit" picking-mode="Ignore" />
+                </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>
 

@@ -73,6 +73,7 @@
 .icon--sound { width: 13.5px; height: 13.125px; background-image: url("project://database/Assets/UI/PickOne/Icons/sound.svg"); }
 .icon--pause { width: 10.5px; height: 10.5px; background-image: url("project://database/Assets/UI/PickOne/Icons/pause.svg"); }
 .icon--profile { width: 12px; height: 12px; background-image: url("project://database/Assets/UI/PickOne/Icons/profile.svg"); }
+.icon--exit { width: 12px; height: 12px; background-image: url("project://database/Assets/UI/PickOne/Icons/exit.svg"); }
 .icon--select { width: 13px; height: 15.75px; background-image: url("project://database/Assets/UI/PickOne/Icons/select-pointer-dark.svg"); }
 .icon--heart { width: 15px; height: 13.76px; background-image: url("project://database/Assets/UI/PickOne/Icons/heart.svg"); }
 .icon--streak { width: 11.33px; height: 13.46px; background-image: url("project://database/Assets/UI/PickOne/Icons/streak.svg"); }
@@ -285,6 +286,14 @@
 
 .icon-button--brand {
     background-color: var(--brand);
+}
+
+.icon-button--exit {
+    margin-left: 12px;
+}
+
+.icon-button--exit:hover {
+    background-color: var(--gold);
 }
 
 /* ---------- main ---------- */
