@@ -5,8 +5,8 @@ using System.Threading.Tasks;
 namespace ExamCards.Exam
 {
     /// <summary>
-    /// Stand-in for live data, used by tests and player builds:
-    /// returns a fixed set of questions after a short fake latency.
+    /// Stand-in for live data, used by tests and whenever <see cref="QuestionServices.Factory"/> isn't set:
+    /// starts a <see cref="LocalExamRound"/> over a fixed set of questions after a short fake latency.
     /// </summary>
     public sealed class MockQuestionService : IQuestionService
     {
@@ -17,24 +17,46 @@ namespace ExamCards.Exam
             _latencyMs = latencyMs;
         }
 
-        public async Task<IReadOnlyList<Question>> GetQuestionsAsync(CancellationToken cancellationToken = default)
+        public async Task<IExamRound> StartRoundAsync(CancellationToken cancellationToken = default)
         {
             if (_latencyMs > 0)
                 await Task.Delay(_latencyMs, cancellationToken);
-            return BuildQuestions();
+            return new LocalExamRound(BuildQuestions());
         }
 
-        static IReadOnlyList<Question> BuildQuestions()
+        sealed class Version
+        {
+            public string Question;
+            public string[] Answers;
+            public string[] Feedbacks;
+            public string Explanation;
+        }
+
+        static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified) =>
+            new KeyedQuestion
+            {
+                Question = new Question
+                {
+                    Id = id,
+                    Section = section,
+                    Source = "mock",
+                    Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers },
+                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers },
+                },
+                Review = new AnswerReview
+                {
+                    CorrectIndex = correctIndex,
+                    Original = new PromptReview { Explanation = original.Explanation, Feedbacks = original.Feedbacks },
+                    Simplified = new PromptReview { Explanation = simplified.Explanation, Feedbacks = simplified.Feedbacks },
+                },
+            };
+
+        static IReadOnlyList<KeyedQuestion> BuildQuestions()
         {
             return new[]
             {
-                new Question
-                {
-                    Id = "q1",
-                    Section = "Sample: Web Fundamentals",
-                    Source = "mock",
-                    CorrectIndex = 1,
-                    Original = new QuestionPrompt
+                Make("q1", "Sample: Web Fundamentals", 1,
+                    new Version
                     {
                         Question = "SCENARIO: A public website sends users to a login page whenever their session has expired. QUESTION: Which HTTP status code should the API return for a request that carries an expired session token?",
                         Answers = new[] { "400 Bad Request", "401 Unauthorized", "403 Forbidden", "404 Not Found" },
@@ -47,7 +69,7 @@ namespace ExamCards.Exam
                         },
                         Explanation = "HTTP separates authentication from authorization. An expired token is an authentication failure, which is what 401 reports.",
                     },
-                    Simplified = new QuestionPrompt
+                    new Version
                     {
                         Question = "A user's login session has expired. Which status code should the API return?",
                         Answers = new[] { "400: the request is malformed", "401: the user must log in", "403: the user isn't allowed", "404: the page doesn't exist" },
@@ -59,15 +81,9 @@ namespace ExamCards.Exam
                             "Wrong. The resource still exists.",
                         },
                         Explanation = "An expired login is an authentication failure, and 401 is the code for that.",
-                    },
-                },
-                new Question
-                {
-                    Id = "q2",
-                    Section = "Sample: Databases",
-                    Source = "mock",
-                    CorrectIndex = 2,
-                    Original = new QuestionPrompt
+                    }),
+                Make("q2", "Sample: Databases", 2,
+                    new Version
                     {
                         Question = "SCENARIO: A reporting query filters a table of ten million orders by customer, and it has become slow as the table has grown. QUESTION: Which change most directly speeds up this query?",
                         Answers = new[] { "Increase the connection pool size.", "Add more columns to the query's result.", "Add an index on the customer column.", "Run the query twice and keep the second result." },
@@ -80,7 +96,7 @@ namespace ExamCards.Exam
                         },
                         Explanation = "Without an index the database scans every row. An index on the filtered column turns that scan into a fast lookup.",
                     },
-                    Simplified = new QuestionPrompt
+                    new Version
                     {
                         Question = "A query that finds orders by customer has become slow. What helps most?",
                         Answers = new[] { "More database connections", "Returning more columns", "An index on the customer column", "Running the query twice" },
@@ -92,15 +108,9 @@ namespace ExamCards.Exam
                             "Wrong. This only adds work.",
                         },
                         Explanation = "An index lets the database skip scanning the whole table.",
-                    },
-                },
-                new Question
-                {
-                    Id = "q3",
-                    Section = "Sample: Version Control",
-                    Source = "mock",
-                    CorrectIndex = 0,
-                    Original = new QuestionPrompt
+                    }),
+                Make("q3", "Sample: Version Control", 0,
+                    new Version
                     {
                         Question = "SCENARIO: A developer has pushed a commit to a shared branch and later finds that it introduced a bug. QUESTION: What is the safest way to undo that commit?",
                         Answers = new[] { "Run git revert on the commit and push the result.", "Run git reset --hard and force-push the branch.", "Delete the branch and recreate it from a teammate's copy.", "Edit the files back by hand without committing." },
@@ -113,7 +123,7 @@ namespace ExamCards.Exam
                         },
                         Explanation = "On shared branches, prefer adding a commit over rewriting history. git revert does that.",
                     },
-                    Simplified = new QuestionPrompt
+                    new Version
                     {
                         Question = "You pushed a bad commit to a shared branch. What is the safest way to undo it?",
                         Answers = new[] { "git revert, then push", "git reset --hard, then force-push", "Delete and recreate the branch", "Fix the files but don't commit" },
@@ -125,8 +135,7 @@ namespace ExamCards.Exam
                             "Wrong. The fix never reaches the branch.",
                         },
                         Explanation = "git revert undoes a commit by adding a new one, so nobody's history breaks.",
-                    },
-                },
+                    }),
             };
         }
     }

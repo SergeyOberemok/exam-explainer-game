@@ -373,6 +373,18 @@
     white-space: normal;
 }
 
+/* Why the last answer or 50/50 request failed; right-aligned in the question's chip row. */
+.status-text {
+    flex-shrink: 1;
+    margin-left: auto;
+    padding-left: 12px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-right;
+    color: var(--brand);
+    white-space: normal;
+}
+
 /* ---------- answer cards ---------- */
 
 .cards-row {

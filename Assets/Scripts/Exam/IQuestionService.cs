@@ -1,12 +1,11 @@
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace ExamCards.Exam
 {
-    /// <summary>Source of exam questions. The real implementation will call the backend API.</summary>
+    /// <summary>Starts rounds of questions. The game uses the backend API; tests use <see cref="MockQuestionService"/>.</summary>
     public interface IQuestionService
     {
-        Task<IReadOnlyList<Question>> GetQuestionsAsync(CancellationToken cancellationToken = default);
+        Task<IExamRound> StartRoundAsync(CancellationToken cancellationToken = default);
     }
 }

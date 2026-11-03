@@ -1,0 +1,16 @@
+{
+    "name": "ExamCards.Exam.Api",
+    "rootNamespace": "ExamCards.Exam.Api",
+    "references": [
+        "ExamCards.Exam"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

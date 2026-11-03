@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using ExamCards.Exam;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -10,9 +11,10 @@ using UnityEngine.UIElements;
 namespace ExamCards.UI
 {
     /// <summary>
-    /// Drives the PickOne screen: loads questions from the question service, shows them one by one,
-    /// and handles card picks (click or keys 1-4), Reveal (click or R), Next, Play Again and Retry
-    /// (click, Enter or Space) and the final score.
+    /// Drives the PickOne screen: starts a round from the question service, shows its questions one by one,
+    /// and handles card picks (click or keys 1-4), Reveal (click or R), 50/50 (click or F), Next, Play Again
+    /// and Retry (click, Enter or Space) and the final score. Answers and 50/50 are checked by the round,
+    /// so they run asynchronously; a failed request leaves the question as it was and shows a message.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PickOneScreen : MonoBehaviour
@@ -22,6 +24,8 @@ namespace ExamCards.UI
         const string LoadingText = "Loading question…";
         const string LoadFailedText = "Could not load questions.";
         const string NoQuestionsText = "No questions are available.";
+        const string AnswerFailedText = "Could not check that answer. Pick again to retry.";
+        const string FiftyFiftyFailedText = "50/50 is unavailable right now. Try again.";
 
         [SerializeField] VisualTreeAsset _answerCardTemplate;
 
@@ -32,9 +36,10 @@ namespace ExamCards.UI
 
         readonly List<AnswerCardView> _cards = new();
         IQuestionService _questionService;
-        IReadOnlyList<Question> _questions;
         ExamSession _session;
-        CancellationTokenSource _loadCancellation;
+
+        // Cancels the round load and any answer or 50/50 request; replaced for every new round.
+        CancellationTokenSource _roundCancellation;
         bool _loadFailed;
 
         Label _categoryLabel;
@@ -49,6 +54,7 @@ namespace ExamCards.UI
         VisualElement _cardsRow;
         VisualElement _fiftyFiftyButton;
         Label _fiftyFiftyCount;
+        Label _statusText;
         Button _revealButton;
         Button _nextButton;
         Button _retryButton;
@@ -69,8 +75,6 @@ namespace ExamCards.UI
 
         void OnEnable()
         {
-            _questionService ??= QuestionServices.Create();
-
             var root = GetComponent<UIDocument>().rootVisualElement;
             _categoryLabel = root.Q<Label>("categoryLabel");
             _simplifiedBadge = root.Q("simplifiedBadge");
@@ -84,6 +88,7 @@ namespace ExamCards.UI
             _cardsRow = root.Q("cardsRow");
             _fiftyFiftyButton = root.Q("fiftyFiftyButton");
             _fiftyFiftyCount = root.Q<Label>("fiftyFiftyCount");
+            _statusText = root.Q<Label>("statusText");
             _revealButton = root.Q<Button>("revealButton");
             _nextButton = root.Q<Button>("nextButton");
             _retryButton = root.Q<Button>("retryButton");
@@ -98,22 +103,17 @@ namespace ExamCards.UI
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
-            _retryButton.clicked += LoadQuestions;
-            _playAgainButton.clicked += StartExam;
-            _fiftyFiftyButton.SetEnabled(false);
-            _revealButton.SetEnabled(false);
-            _resultsOverlay.AddToClassList(ResultsHiddenClass);
+            _retryButton.clicked += LoadRound;
+            _playAgainButton.clicked += LoadRound;
             _cardsRow.Clear();
             _cards.Clear();
 
-            LoadQuestions();
+            LoadRound();
         }
 
         void OnDisable()
         {
-            _loadCancellation?.Cancel();
-            _loadCancellation?.Dispose();
-            _loadCancellation = null;
+            CancelRound();
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
@@ -122,9 +122,10 @@ namespace ExamCards.UI
             if (_nextButton != null)
                 _nextButton.clicked -= OnNextPressed;
             if (_retryButton != null)
-                _retryButton.clicked -= LoadQuestions;
-            if (_playAgainButton != null)
-                _playAgainButton.clicked -= StartExam;
+            {
+                _retryButton.clicked -= LoadRound;
+                _playAgainButton.clicked -= LoadRound;
+            }
         }
 
         void Update()
@@ -136,14 +137,14 @@ namespace ExamCards.UI
             if (_session == null)
             {
                 if (_loadFailed && WasNextKeyPressed(keyboard))
-                    LoadQuestions();
+                    LoadRound();
                 return;
             }
 
             if (_session.IsFinished)
             {
                 if (WasNextKeyPressed(keyboard))
-                    StartExam();
+                    LoadRound();
                 return;
             }
 
@@ -185,20 +186,39 @@ namespace ExamCards.UI
             return false;
         }
 
-        async void LoadQuestions()
+        void CancelRound()
         {
+            _roundCancellation?.Cancel();
+            _roundCancellation?.Dispose();
+            _roundCancellation = null;
+        }
+
+        /// <summary>Starts a new round. A round's answers are recorded where it is held, so it can't be replayed.</summary>
+        async void LoadRound()
+        {
+            _session = null;
             _loadFailed = false;
+            _resultsOverlay.AddToClassList(ResultsHiddenClass);
             _retryButton.AddToClassList(HiddenClass);
+            _nextButton.AddToClassList(HiddenClass);
+            _explanationSection.AddToClassList(HiddenClass);
+            _fiftyFiftyButton.SetEnabled(false);
+            _revealButton.SetEnabled(false);
+            _cardsRow.Clear();
+            _cards.Clear();
+            ShowStatus(null);
             _questionText.text = LoadingText;
 
-            _loadCancellation?.Cancel();
-            _loadCancellation?.Dispose();
-            _loadCancellation = new CancellationTokenSource();
-            var token = _loadCancellation.Token;
+            CancelRound();
+            _roundCancellation = new CancellationTokenSource();
+            var token = _roundCancellation.Token;
 
+            IExamRound round;
             try
             {
-                _questions = await _questionService.GetQuestionsAsync(token);
+                // Created here rather than in OnEnable, so bad settings end in the Retry message too.
+                _questionService ??= QuestionServices.Create();
+                round = await _questionService.StartRoundAsync(token);
             }
             catch (OperationCanceledException)
             {
@@ -216,14 +236,15 @@ namespace ExamCards.UI
             if (token.IsCancellationRequested)
                 return;
 
-            if (_questions.Count == 0)
+            if (round.Questions.Count == 0)
             {
                 Debug.LogWarning("The question service returned no questions.", this);
                 ShowLoadFailure(NoQuestionsText);
                 return;
             }
 
-            StartExam();
+            _session = new ExamSession(round);
+            ShowCurrentQuestion();
         }
 
         void ShowLoadFailure(string message)
@@ -233,11 +254,10 @@ namespace ExamCards.UI
             _retryButton.RemoveFromClassList(HiddenClass);
         }
 
-        void StartExam()
+        void ShowStatus(string message)
         {
-            _session = new ExamSession(_questions);
-            _resultsOverlay.AddToClassList(ResultsHiddenClass);
-            ShowCurrentQuestion();
+            _statusText.text = message ?? string.Empty;
+            _statusText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(message));
         }
 
         void ShowCurrentQuestion()
@@ -246,15 +266,17 @@ namespace ExamCards.UI
             _categoryLabel.text = question.Section?.ToUpperInvariant();
             _progressLabel.text = $"Question {_session.CurrentIndex + 1} of {_session.Total}";
 
+            ShowStatus(null);
             EnsureCardCount(question.Original.Answers.Count);
             RenderPrompt();
         }
 
-        /// <summary>Shows the current text and state. Used for a new question, an answer and a reveal.</summary>
+        /// <summary>Shows the current text and state. Used for a new question, an answer, a 50/50 and a reveal.</summary>
         void RenderPrompt()
         {
             var question = _session.Current;
             var prompt = _session.CurrentPrompt;
+            var review = _session.CurrentPromptReview;
             var answered = _session.IsCurrentAnswered;
 
             var percent = Mathf.RoundToInt(100f * _session.AnsweredCount / _session.Total);
@@ -262,14 +284,14 @@ namespace ExamCards.UI
             _progressFill.style.width = Length.Percent(percent);
 
             _questionText.text = prompt.Question;
-            _explanationText.text = prompt.Explanation;
+            _explanationText.text = review?.Explanation;
             _explanationSection.EnableInClassList(HiddenClass, !answered);
             _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
 
             for (var i = 0; i < _cards.Count; i++)
             {
-                _cards[i].Bind(prompt.Answers[i], prompt.Feedbacks[i]);
-                _cards[i].SetState(GetCardState(i, question.CorrectIndex));
+                _cards[i].Bind(prompt.Answers[i], review?.Feedbacks[i]);
+                _cards[i].SetState(GetCardState(i));
             }
 
             for (var i = 0; i < _hearts.Count; i++)
@@ -287,11 +309,11 @@ namespace ExamCards.UI
             ScrollQuestionPanel(answered);
         }
 
-        AnswerCardState GetCardState(int index, int correctIndex)
+        AnswerCardState GetCardState(int index)
         {
             if (!_session.IsCurrentAnswered)
                 return _session.IsEliminated(index) ? AnswerCardState.Eliminated : AnswerCardState.Interactive;
-            if (index == correctIndex)
+            if (index == _session.CurrentReview.CorrectIndex)
                 return AnswerCardState.Correct;
             return index == _session.AnsweredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
         }
@@ -332,20 +354,56 @@ namespace ExamCards.UI
 
         void OnCardSelected(int index)
         {
-            if (_session == null || _session.IsFinished || _session.IsCurrentAnswered || _session.IsEliminated(index))
+            var session = _session;
+            if (session == null || session.IsBusy || session.IsFinished || session.IsCurrentAnswered
+                || session.IsEliminated(index))
                 return;
 
-            _session.Answer(index);
-            RenderPrompt();
+            RunRoundRequest(session, token => session.AnswerAsync(index, token), AnswerFailedText);
         }
 
         void OnFiftyFiftyClicked(ClickEvent evt) => OnFiftyFiftyPressed();
 
         void OnFiftyFiftyPressed()
         {
-            if (_session == null)
+            var session = _session;
+            if (session == null || !session.CanEliminate)
                 return;
-            if (_session.Eliminate())
+
+            RunRoundRequest(session, token => session.EliminateAsync(token), FiftyFiftyFailedText);
+        }
+
+        /// <summary>
+        /// Runs an answer or 50/50 request and redraws when it ends. Results for a round that has since been
+        /// replaced are dropped; a failure keeps the question as it was and shows <paramref name="failureText"/>.
+        /// </summary>
+        async void RunRoundRequest(ExamSession session, Func<CancellationToken, Task> request, string failureText)
+        {
+            var token = _roundCancellation.Token;
+            ShowStatus(null);
+
+            Task pending;
+            try
+            {
+                pending = request(token);
+                RenderPrompt(); // The session is busy now, so 50/50 shows as unavailable.
+                await pending;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                if (token.IsCancellationRequested || session != _session)
+                    return;
+                Debug.LogException(e, this);
+                ShowStatus(failureText);
+                RenderPrompt();
+                return;
+            }
+
+            if (session == _session)
                 RenderPrompt();
         }
 

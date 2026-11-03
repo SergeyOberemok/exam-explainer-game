@@ -1,3 +1,4 @@
+using ExamCards.Exam.Api;
 using ExamCards.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -6,7 +7,7 @@ using UnityEngine.UIElements;
 
 namespace ExamCards.Editor
 {
-    /// <summary>One-click setup of the PickOne screen in SampleScene (PanelSettings + UIDocument + controller).</summary>
+    /// <summary>One-click setup of the PickOne screen in SampleScene (PanelSettings + UIDocument + controller + API settings).</summary>
     public static class PickOneSceneSetup
     {
         const string ScenePath = "Assets/Scenes/SampleScene.unity";
@@ -15,6 +16,7 @@ namespace ExamCards.Editor
         const string ScreenUxmlPath = "Assets/UI/PickOne/PickOne.uxml";
         const string CardUxmlPath = "Assets/UI/PickOne/AnswerCard.uxml";
         const string GameObjectName = "PickOneUI";
+        const string ApiSettingsPath = "Assets/Resources/" + ExamApiSettings.ResourceName + ".asset";
 
         [MenuItem("Tools/ExamCards/Setup PickOne Scene")]
         public static void Setup()
@@ -23,6 +25,7 @@ namespace ExamCards.Editor
                 return;
 
             var panelSettings = GetOrCreatePanelSettings();
+            GetOrCreateApiSettings();
             var screenUxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(ScreenUxmlPath);
             var cardUxml = AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(CardUxmlPath);
             if (screenUxml == null || cardUxml == null)
@@ -54,6 +57,21 @@ namespace ExamCards.Editor
             EditorSceneManager.SaveScene(scene);
             Selection.activeGameObject = go;
             Debug.Log($"PickOne screen set up in {ScenePath}.");
+        }
+
+        static ExamApiSettings GetOrCreateApiSettings()
+        {
+            var settings = AssetDatabase.LoadAssetAtPath<ExamApiSettings>(ApiSettingsPath);
+            if (settings != null)
+                return settings;
+
+            if (!AssetDatabase.IsValidFolder("Assets/Resources"))
+                AssetDatabase.CreateFolder("Assets", "Resources");
+            settings = ScriptableObject.CreateInstance<ExamApiSettings>();
+            AssetDatabase.CreateAsset(settings, ApiSettingsPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"Created {ApiSettingsPath}; set the backend URL there.");
+            return settings;
         }
 
         static PanelSettings GetOrCreatePanelSettings()

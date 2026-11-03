@@ -3,6 +3,7 @@
     "rootNamespace": "ExamCards.Exam.Tests",
     "references": [
         "ExamCards.Exam",
+        "ExamCards.Exam.Api",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

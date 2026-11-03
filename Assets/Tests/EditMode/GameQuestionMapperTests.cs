@@ -1,0 +1,210 @@
+using System;
+using ExamCards.Exam.Api;
+using NUnit.Framework;
+using UnityEngine;
+
+namespace ExamCards.Exam.Tests
+{
+    public class GameQuestionMapperTests
+    {
+        // Same shape as a real POST /game/rounds response; answers deliberately out of order.
+        internal const string RoundJson = @"{
+            ""round_id"": ""r1"",
+            ""items"": [{
+                ""id"": ""q1"",
+                ""simplified"": false,
+                ""section"": ""Domain 5"",
+                ""assessment_type"": ""multiple-choice"",
+                ""question"": ""Original <example> text"",
+                ""answers"": [
+                    { ""index"": 2, ""text"": ""C"" },
+                    { ""index"": 0, ""text"": ""A"" },
+                    { ""index"": 1, ""text"": ""B"" },
+                    { ""index"": 3, ""text"": ""D"" }
+                ]
+            }, {
+                ""id"": ""q0"",
+                ""simplified"": false,
+                ""section"": ""Domain 1"",
+                ""assessment_type"": ""multiple-choice"",
+                ""question"": ""Second"",
+                ""answers"": [ { ""index"": 0, ""text"": ""x"" }, { ""index"": 1, ""text"": ""y"" } ]
+            }],
+            ""simplified"": [{
+                ""id"": ""q1"",
+                ""simplified"": true,
+                ""section"": ""Domain 5"",
+                ""assessment_type"": ""multiple-choice"",
+                ""question"": ""Simple text"",
+                ""answers"": [
+                    { ""index"": 0, ""text"": ""a"" }, { ""index"": 1, ""text"": ""b"" },
+                    { ""index"": 2, ""text"": ""c"" }, { ""index"": 3, ""text"": ""d"" }
+                ]
+            }],
+            ""total"": 60,
+            ""fifty_fifty_charges"": 2
+        }";
+
+        internal const string AnswerJson = @"{
+            ""question_id"": ""q1"",
+            ""answer_index"": 0,
+            ""is_correct"": false,
+            ""correct_index"": 1,
+            ""original"": { ""explanation"": ""Because."", ""feedbacks"": [""fa"", ""fb"", ""fc"", ""fd""] },
+            ""has_simplified"": true,
+            ""simplified"": { ""explanation"": ""Simply."", ""feedbacks"": [""sa"", ""sb"", ""sc"", ""sd""] }
+        }";
+
+        static GameRoundDto ParseRound() => JsonUtility.FromJson<GameRoundDto>(RoundJson);
+        static GameAnswerResultDto ParseAnswer() => JsonUtility.FromJson<GameAnswerResultDto>(AnswerJson);
+
+        [Test]
+        public void BuildQuestions_MapsParsedJson_InPlayOrder()
+        {
+            var questions = GameQuestionMapper.BuildQuestions(ParseRound());
+
+            Assert.AreEqual(2, questions.Count);
+            var question = questions[0];
+            Assert.AreEqual("q1", question.Id);
+            Assert.AreEqual("Domain 5", question.Section);
+            Assert.AreEqual(GameQuestionMapper.Source, question.Source);
+            Assert.AreEqual("Original <example> text", question.Original.Question);
+            CollectionAssert.AreEqual(new[] { "A", "B", "C", "D" }, question.Original.Answers);
+            Assert.AreEqual("q0", questions[1].Id);
+        }
+
+        [Test]
+        public void BuildQuestions_JoinsSimplifiedById()
+        {
+            var questions = GameQuestionMapper.BuildQuestions(ParseRound());
+
+            Assert.IsTrue(questions[0].CanReveal);
+            Assert.AreEqual("Simple text", questions[0].Simplified.Question);
+            Assert.IsFalse(questions[1].CanReveal);
+        }
+
+        [Test]
+        public void BuildQuestions_NoRoundId_Throws()
+        {
+            var round = ParseRound();
+            round.round_id = "";
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+        }
+
+        [Test]
+        public void BuildQuestions_SimplifiedNotMarkedSimplified_Throws()
+        {
+            var round = ParseRound();
+            round.simplified[0].simplified = false;
+
+            var e = Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+            StringAssert.Contains("q1", e.Message);
+        }
+
+        [Test]
+        public void BuildQuestions_OriginalMarkedSimplified_Throws()
+        {
+            var round = ParseRound();
+            round.items[1].simplified = true;
+
+            var e = Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+            StringAssert.Contains("q0", e.Message);
+        }
+
+        [Test]
+        public void BuildQuestions_SimplifiedForAnotherQuestion_Throws()
+        {
+            var round = ParseRound();
+            round.simplified[0].id = "elsewhere";
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+        }
+
+        [Test]
+        public void BuildQuestions_SimplifiedWithDifferentAnswerCount_Throws()
+        {
+            var round = ParseRound();
+            round.simplified[0].answers = new[] { new GameAnswerDto { index = 0, text = "a" } };
+
+            var e = Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+            StringAssert.Contains("q1", e.Message);
+        }
+
+        [Test]
+        public void BuildQuestions_GapInAnswerIndices_Throws()
+        {
+            var round = ParseRound();
+            round.items[0].answers[3].index = 5;
+
+            var e = Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+            StringAssert.Contains("q1", e.Message);
+        }
+
+        [Test]
+        public void BuildQuestions_DuplicateQuestion_Throws()
+        {
+            var round = ParseRound();
+            round.items[1].id = "q1";
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+        }
+
+        [Test]
+        public void BuildQuestions_TooManyAnswers_Throws()
+        {
+            var round = ParseRound();
+            var answers = new GameAnswerDto[Question.MaxAnswers + 1];
+            for (var i = 0; i < answers.Length; i++)
+                answers[i] = new GameAnswerDto { index = i, text = i.ToString() };
+            round.items[1].answers = answers;
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.BuildQuestions(round));
+        }
+
+        [Test]
+        public void ToReview_MapsBothVersions()
+        {
+            var review = GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0);
+
+            Assert.AreEqual(1, review.CorrectIndex);
+            Assert.AreEqual("Because.", review.Original.Explanation);
+            CollectionAssert.AreEqual(new[] { "fa", "fb", "fc", "fd" }, review.Original.Feedbacks);
+            Assert.AreEqual("Simply.", review.Simplified.Explanation);
+        }
+
+        [Test]
+        public void ToReview_WithoutSimplified_HasNoSimplifiedReview()
+        {
+            var result = ParseAnswer();
+            result.has_simplified = false;
+
+            Assert.IsNull(GameQuestionMapper.ToReview(result, "q1", 0).Simplified);
+        }
+
+        [Test]
+        public void ToReview_ForAnotherAnswer_Throws()
+        {
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToReview(ParseAnswer(), "q2", 0));
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToReview(ParseAnswer(), "q1", 3));
+        }
+
+        [Test]
+        public void ToReview_IsCorrectContradictingCorrectIndex_Throws()
+        {
+            var result = ParseAnswer();
+            result.is_correct = true;
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToReview(result, "q1", 0));
+        }
+
+        [Test]
+        public void ToEliminated_ForAnotherQuestion_Throws()
+        {
+            var result = new GameFiftyFiftyResultDto { question_id = "q2", eliminated_indices = new[] { 0, 2 } };
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToEliminated(result, "q1"));
+            CollectionAssert.AreEqual(new[] { 0, 2 }, GameQuestionMapper.ToEliminated(result, "q2"));
+        }
+    }
+}
