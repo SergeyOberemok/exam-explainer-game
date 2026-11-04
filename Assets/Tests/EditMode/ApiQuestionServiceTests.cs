@@ -15,7 +15,7 @@ namespace ExamCards.Exam.Tests
         static T Run<T>(Task<T> task) => task.GetAwaiter().GetResult();
 
         static ApiQuestionService MakeService(FakeTransport transport, int count = 10) =>
-            new ApiQuestionService(BaseUrl, count, timeoutSeconds: 7, transport);
+            new ApiQuestionService(BaseUrl, count, timeoutSeconds: 7, transport, retryDelaySeconds: 0f);
 
         [Test]
         public void StartRound_PostsTheCount_AndBuildsTheRound()
@@ -26,7 +26,7 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[0];
             Assert.AreEqual("POST", request.Method);
-            Assert.AreEqual("http://api.test/game/rounds", request.Url);
+            Assert.AreEqual("http://api.test/v1/game/rounds", request.Url);
             Assert.AreEqual("{\"count\":3}", request.Body);
             Assert.AreEqual(7, request.TimeoutSeconds);
             Assert.AreEqual(2, round.Questions.Count);
@@ -56,7 +56,7 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[1];
             // The round id is escaped as a path segment: a space is %20, not +.
-            Assert.AreEqual("http://api.test/game/rounds/r%201%2Fx/answers", request.Url);
+            Assert.AreEqual("http://api.test/v1/game/rounds/r%201%2Fx/answers", request.Url);
             Assert.AreEqual("{\"question_id\":\"q1\",\"answer_index\":0}", request.Body);
             Assert.AreEqual(1, review.CorrectIndex);
             Assert.AreEqual("Because.", review.Original.Explanation);
@@ -70,11 +70,12 @@ namespace ExamCards.Exam.Tests
                 .Reply(200, "{\"question_id\":\"q1\",\"eliminated_indices\":[0,3],\"fifty_fifty_remaining\":1}");
             var round = Run(MakeService(transport).StartRoundAsync());
 
-            var eliminated = Run(round.EliminateAsync("q1"));
+            var result = Run(round.EliminateAsync("q1"));
 
-            Assert.AreEqual("http://api.test/game/rounds/r1/fifty-fifty", transport.Requests[1].Url);
+            Assert.AreEqual("http://api.test/v1/game/rounds/r1/fifty-fifty", transport.Requests[1].Url);
             Assert.AreEqual("{\"question_id\":\"q1\"}", transport.Requests[1].Body);
-            CollectionAssert.AreEqual(new[] { 0, 3 }, eliminated);
+            CollectionAssert.AreEqual(new[] { 0, 3 }, result.Eliminated);
+            Assert.AreEqual(1, result.Remaining);
         }
 
         [Test]
@@ -89,7 +90,7 @@ namespace ExamCards.Exam.Tests
 
             Assert.AreEqual(409, e.StatusCode);
             Assert.AreEqual("question already answered", e.Detail);
-            StringAssert.Contains("http://api.test/game/rounds/r1/answers", e.Message);
+            StringAssert.Contains("http://api.test/v1/game/rounds/r1/answers", e.Message);
             StringAssert.Contains("HTTP 409", e.Message);
         }
 
@@ -174,7 +175,7 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[0];
             Assert.AreEqual("GET", request.Method);
-            Assert.AreEqual("http://api.test/search/game-questions?q=a%26b%20c%2Fd&limit=3", request.Url);
+            Assert.AreEqual("http://api.test/v1/search/game-questions?q=a%26b%20c%2Fd&limit=3", request.Url);
             Assert.IsNull(request.Body);
             Assert.AreEqual(new[] { "s1", "s2" }, new[] { results[0].Id, results[1].Id });
             CollectionAssert.AreEqual(new[] { "A", "B" }, results[0].Original.Answers);
@@ -223,7 +224,7 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[1];
             Assert.AreEqual("POST", request.Method);
-            Assert.AreEqual("http://api.test/game/rounds/r1/questions", request.Url);
+            Assert.AreEqual("http://api.test/v1/game/rounds/r1/questions", request.Url);
             Assert.AreEqual("{\"question_id\":\"s1\"}", request.Body);
             Assert.AreEqual("s1", question.Id);
             Assert.AreEqual("CORS?", question.Simplified.Question);
@@ -273,7 +274,7 @@ namespace ExamCards.Exam.Tests
             Assert.IsTrue(ExamApiSettings.TryValidateBaseUrl(baseUrl, out var error), error);
         }
 
-        sealed class FakeTransport : IHttpTransport
+        internal sealed class FakeTransport : IHttpTransport
         {
             readonly Queue<HttpResponse> _responses = new Queue<HttpResponse>();
 

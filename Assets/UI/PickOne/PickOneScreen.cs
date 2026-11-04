@@ -13,7 +13,9 @@ namespace ExamCards.UI
     /// <summary>
     /// Drives the PickOne screen: starts a round from the question service, shows its questions one by one,
     /// and handles card picks (click or keys 1-4), Reveal (click or R), 50/50 (click or F), Next, Play Again
-    /// and Retry (click, Enter or Space) and the final score. Answers and 50/50 are checked by the round,
+    /// and Retry (click, Enter or Space) and the final score. When the loaded questions are answered, Next loads
+    /// more for the same round (none it has had), so play goes on until the lives or the questions run out.
+    /// Answers and 50/50 are checked by the round,
     /// so they run asynchronously; a failed request leaves the question as it was and shows a message.
     /// The search modal (header button or /) finds questions by text; choosing one adds it to the round and
     /// plays it right away.
@@ -37,6 +39,8 @@ namespace ExamCards.UI
         const string AlreadyAnsweredText = "You have already answered that question in this round.";
         const string NoRoundText = "Wait for the round to load, then choose a question.";
         const string ExamOverText = "No lives left, so no more questions can be added to this round.";
+        const string LoadingMoreText = "Loading more questions…";
+        const string LoadMoreFailedText = "Could not load more questions. Press Next to retry.";
 
         [SerializeField] VisualTreeAsset _answerCardTemplate;
 
@@ -266,11 +270,27 @@ namespace ExamCards.UI
             try
             {
                 // Created here rather than in OnEnable, so bad settings end in the Retry message too.
-                _questionService ??= QuestionServices.Create();
+                if (_questionService == null)
+                {
+#if !UNITY_EDITOR
+                    // In a player the API assembly always registers itself; mock questions there mean a broken build.
+                    if (QuestionServices.Factory == null)
+                        Debug.LogError("No question service is registered; the game is showing mock questions.", this);
+#endif
+                    _questionService = QuestionServices.Create();
+                }
                 round = await _questionService.StartRoundAsync(token);
             }
             catch (OperationCanceledException)
             {
+                return;
+            }
+            catch (NoQuestionsException e)
+            {
+                if (token.IsCancellationRequested)
+                    return;
+                Debug.LogWarning(e.Message, this);
+                ShowLoadFailure(NoQuestionsText);
                 return;
             }
             catch (Exception e)
@@ -351,8 +371,7 @@ namespace ExamCards.UI
             _revealButton.SetEnabled(question.CanReveal && !_session.IsCurrentRevealed);
             _revealButton.text = _session.IsCurrentRevealed ? "Simplified Shown" : "Reveal Simplified [R]";
 
-            var isLast = _session.CurrentIndex + 1 >= _session.Total || _session.Lives <= 0;
-            _nextButton.text = isLast ? "See Results" : "Next Question";
+            _nextButton.text = _session.IsLastQuestion ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
 
             ScrollQuestionPanel(answered);
@@ -428,6 +447,9 @@ namespace ExamCards.UI
         /// </summary>
         async void RunRoundRequest(ExamSession session, Func<CancellationToken, Task> request, string failureText)
         {
+            // Null after OnDisable; a late input then has no round to act on.
+            if (_roundCancellation == null)
+                return;
             var token = _roundCancellation.Token;
             ShowStatus(null);
 
@@ -469,10 +491,57 @@ namespace ExamCards.UI
             if (_session == null || _session.IsFinished || !_session.IsCurrentAnswered || _session.IsBusy)
                 return;
 
+            if (_session.NeedsMore)
+            {
+                LoadMoreAndAdvance(_session);
+                return;
+            }
+            Advance();
+        }
+
+        void Advance()
+        {
             if (_session.MoveNext())
                 ShowCurrentQuestion();
             else
                 ShowResults();
+        }
+
+        /// <summary>
+        /// Loads the round's next questions, then moves on: to the first new one, or to the results when the round
+        /// has none left. A failure keeps the answered question and shows a message; Next tries again.
+        /// </summary>
+        async void LoadMoreAndAdvance(ExamSession session)
+        {
+            if (_roundCancellation == null)
+                return;
+            var token = _roundCancellation.Token;
+            ShowStatus(LoadingMoreText);
+
+            try
+            {
+                var pending = session.LoadMoreAsync(token);
+                RenderPrompt(); // Busy now, so 50/50 and Next stay inert.
+                await pending;
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                if (token.IsCancellationRequested || session != _session)
+                    return;
+                Debug.LogException(e, this);
+                ShowStatus(LoadMoreFailedText);
+                RenderPrompt();
+                return;
+            }
+
+            if (session != _session)
+                return;
+            ShowStatus(null);
+            Advance();
         }
 
         // ---------- search ----------
@@ -604,6 +673,8 @@ namespace ExamCards.UI
                 return;
             }
 
+            if (_roundCancellation == null)
+                return;
             var token = _roundCancellation.Token;
             _search.ShowMessage(AddingText);
 
@@ -640,7 +711,8 @@ namespace ExamCards.UI
         void ShowResults()
         {
             var outOfLives = _session.Lives <= 0;
-            _resultsScore.text = $"{(outOfLives ? "Out of lives! " : "")}You scored {_session.Score} / {_session.Total}";
+            // Out of answered questions: a round that keeps loading batches has no fixed total.
+            _resultsScore.text = $"{(outOfLives ? "Out of lives! " : "")}You scored {_session.Score} / {_session.AnsweredCount}";
             _resultsOverlay.RemoveFromClassList(ResultsHiddenClass);
         }
     }

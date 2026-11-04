@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using NUnit.Framework;
 
 namespace ExamCards.Exam.Tests
@@ -8,7 +9,7 @@ namespace ExamCards.Exam.Tests
         static KeyedQuestion MakeQuestion(int correctIndex = 0) => ExamSessionTests.MakeQuestion(correctIndex);
 
         [Test]
-        public void SubmitAnswer_SameAnswerAgain_RepeatsTheResult_OtherAnswerThrows()
+        public void SubmitAnswer_SameAnswerAgain_RepeatsTheResult_OtherAnswerReturnsTheRecordedOne()
         {
             var question = MakeQuestion();
             var round = new LocalExamRound(new[] { question });
@@ -16,7 +17,28 @@ namespace ExamCards.Exam.Tests
 
             Assert.AreSame(question.Review, round.SubmitAnswerAsync(id, 2).Result);
             Assert.AreSame(question.Review, round.SubmitAnswerAsync(id, 2).Result);
-            Assert.Throws<InvalidOperationException>(() => round.SubmitAnswerAsync(id, 1));
+            var other = round.SubmitAnswerAsync(id, 1).Result;
+            Assert.AreEqual(2, other.AnsweredIndex);
+            Assert.AreEqual(question.Review.CorrectIndex, other.CorrectIndex);
+        }
+
+        [Test]
+        public void FetchMore_HandsOutBatchesWithoutQuestionsTheRoundHas()
+        {
+            var start = MakeQuestion();
+            var added = MakeQuestion();
+            var more = new[] { MakeQuestion(), added, MakeQuestion(), MakeQuestion() };
+            var round = new LocalExamRound(new[] { start }, catalog: new[] { added }, more: more, batchSize: 2);
+            round.AddQuestionAsync(added.Question.Id).Wait();
+
+            Assert.IsTrue(round.HasMore);
+            CollectionAssert.AreEqual(new[] { more[0].Question.Id, more[2].Question.Id },
+                round.FetchMoreAsync().Result.Select(q => q.Id));
+            CollectionAssert.AreEqual(new[] { more[3].Question.Id }, round.FetchMoreAsync().Result.Select(q => q.Id));
+            Assert.IsFalse(round.HasMore);
+            Assert.AreEqual(0, round.FetchMoreAsync().Result.Count);
+            // Fetched questions can be answered in the round.
+            Assert.AreSame(more[3].Review, round.SubmitAnswerAsync(more[3].Question.Id, 0).Result);
         }
 
         [Test]
@@ -53,7 +75,10 @@ namespace ExamCards.Exam.Tests
 
             var eliminated = round.EliminateAsync(first.Question.Id).Result;
 
-            CollectionAssert.AreEqual(eliminated, round.EliminateAsync(first.Question.Id).Result);
+            Assert.AreEqual(0, eliminated.Remaining);
+            var again = round.EliminateAsync(first.Question.Id).Result;
+            CollectionAssert.AreEqual(eliminated.Eliminated, again.Eliminated);
+            Assert.AreEqual(0, again.Remaining);
             Assert.Throws<InvalidOperationException>(() => round.EliminateAsync(second.Question.Id));
         }
 

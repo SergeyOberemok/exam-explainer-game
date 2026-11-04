@@ -2,18 +2,18 @@ using System;
 
 namespace ExamCards.Exam.Api
 {
-    // Wire format of the backend's /game routes. Public snake_case fields match the JSON keys,
+    // Wire format of the backend's /v1/game routes (pinned by the contract files in Assets/Tests/EditMode/Contract). Public snake_case fields match the JSON keys,
     // because Unity's JsonUtility maps fields by name and ignores properties.
 #pragma warning disable IDE1006 // Naming: these names must match the JSON keys.
 
-    /// <summary>Body of <c>POST /game/rounds</c>.</summary>
+    /// <summary>Body of <c>POST /v1/game/rounds</c>.</summary>
     [Serializable]
     public sealed class GameRoundRequestDto
     {
         public int count;
     }
 
-    /// <summary>Response of <c>POST /game/rounds</c>: the questions without their answer key.</summary>
+    /// <summary>Response of <c>POST /v1/game/rounds</c>: the questions without their answer key.</summary>
     [Serializable]
     public sealed class GameRoundDto
     {
@@ -49,7 +49,31 @@ namespace ExamCards.Exam.Api
         public string text;
     }
 
-    /// <summary>Body of <c>POST /game/rounds/{round_id}/answers</c>.</summary>
+    /// <summary>Body of <c>POST /v1/game/rounds/{round_id}/batches</c>: batch 0 is the start, so the first call asks for 1.</summary>
+    [Serializable]
+    public sealed class GameRoundBatchRequestDto
+    {
+        public int batch_index;
+        public int count;
+    }
+
+    /// <summary>Response of <c>POST /v1/game/rounds/{round_id}/batches</c>: more questions, none already in the round.</summary>
+    [Serializable]
+    public sealed class GameRoundBatchDto
+    {
+        public int batch_index;
+
+        /// <summary>Empty when the round has used every question.</summary>
+        public GameQuestionDto[] items;
+
+        /// <summary>Simplified versions of the items that have one, matched by <c>id</c>.</summary>
+        public GameQuestionDto[] simplified;
+
+        /// <summary>Playable questions the round doesn't have yet.</summary>
+        public int remaining;
+    }
+
+    /// <summary>Body of <c>POST /v1/game/rounds/{round_id}/answers</c>.</summary>
     [Serializable]
     public sealed class GameAnswerRequestDto
     {
@@ -57,7 +81,7 @@ namespace ExamCards.Exam.Api
         public int answer_index;
     }
 
-    /// <summary>Response of <c>POST /game/rounds/{round_id}/answers</c>.</summary>
+    /// <summary>Response of <c>POST /v1/game/rounds/{round_id}/answers</c> and <c>GET /v1/game/rounds/{round_id}/answers/{question_id}</c>.</summary>
     [Serializable]
     public sealed class GameAnswerResultDto
     {
@@ -80,14 +104,14 @@ namespace ExamCards.Exam.Api
         public string[] feedbacks;
     }
 
-    /// <summary>Body of <c>POST /game/rounds/{round_id}/fifty-fifty</c>.</summary>
+    /// <summary>Body of <c>POST /v1/game/rounds/{round_id}/fifty-fifty</c>.</summary>
     [Serializable]
     public sealed class GameFiftyFiftyRequestDto
     {
         public string question_id;
     }
 
-    /// <summary>Response of <c>POST /game/rounds/{round_id}/fifty-fifty</c>.</summary>
+    /// <summary>Response of <c>POST /v1/game/rounds/{round_id}/fifty-fifty</c>.</summary>
     [Serializable]
     public sealed class GameFiftyFiftyResultDto
     {
@@ -96,14 +120,14 @@ namespace ExamCards.Exam.Api
         public int fifty_fifty_remaining;
     }
 
-    /// <summary>Body of <c>POST /game/rounds/{round_id}/questions</c>.</summary>
+    /// <summary>Body of <c>POST /v1/game/rounds/{round_id}/questions</c>.</summary>
     [Serializable]
     public sealed class GameRoundQuestionRequestDto
     {
         public string question_id;
     }
 
-    /// <summary>Response of <c>POST /game/rounds/{round_id}/questions</c>: the added question, without its key.</summary>
+    /// <summary>Response of <c>POST /v1/game/rounds/{round_id}/questions</c>: the added question, without its key.</summary>
     [Serializable]
     public sealed class GameRoundQuestionDto
     {
@@ -113,7 +137,7 @@ namespace ExamCards.Exam.Api
         public GameQuestionDto[] simplified;
     }
 
-    /// <summary>Response of <c>GET /search/game-questions</c>: playable matches, best first, without their key.</summary>
+    /// <summary>Response of <c>GET /v1/search/game-questions</c>: playable matches, best first, without their key.</summary>
     [Serializable]
     public sealed class GameQuestionListDto
     {
@@ -121,11 +145,12 @@ namespace ExamCards.Exam.Api
         public int total;
     }
 
-    /// <summary>FastAPI's error body when <c>detail</c> is a message (validation errors use a list instead).</summary>
+    /// <summary>The backend's error body: a message and a machine-readable <c>code</c> such as <c>already_answered</c>.</summary>
     [Serializable]
     public sealed class ApiErrorDto
     {
         public string detail;
+        public string code;
     }
 
 #pragma warning restore IDE1006

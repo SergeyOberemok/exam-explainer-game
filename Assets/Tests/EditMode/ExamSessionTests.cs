@@ -618,7 +618,7 @@ namespace ExamCards.Exam.Tests
         {
             readonly KeyedQuestion _question;
             TaskCompletionSource<AnswerReview> _answer;
-            TaskCompletionSource<IReadOnlyList<int>> _elimination;
+            TaskCompletionSource<FiftyFiftyResult> _elimination;
             TaskCompletionSource<Question> _add;
 
             public PendingRound(KeyedQuestion question)
@@ -629,6 +629,7 @@ namespace ExamCards.Exam.Tests
 
             public IReadOnlyList<Question> Questions { get; }
             public int FiftyFiftyCharges => 2;
+            public bool HasMore => false;
 
             public Task<AnswerReview> SubmitAnswerAsync(string questionId, int answerIndex, CancellationToken cancellationToken = default)
             {
@@ -636,11 +637,14 @@ namespace ExamCards.Exam.Tests
                 return _answer.Task;
             }
 
-            public Task<IReadOnlyList<int>> EliminateAsync(string questionId, CancellationToken cancellationToken = default)
+            public Task<FiftyFiftyResult> EliminateAsync(string questionId, CancellationToken cancellationToken = default)
             {
-                _elimination = new TaskCompletionSource<IReadOnlyList<int>>();
+                _elimination = new TaskCompletionSource<FiftyFiftyResult>();
                 return _elimination.Task;
             }
+
+            public Task<IReadOnlyList<Question>> FetchMoreAsync(CancellationToken cancellationToken = default) =>
+                Task.FromResult<IReadOnlyList<Question>>(Array.Empty<Question>());
 
             public Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
             {
@@ -653,7 +657,8 @@ namespace ExamCards.Exam.Tests
 
             public void Complete(AnswerReview review = null) => _answer.SetResult(review ?? _question.Review);
             public void Fail(Exception e) => _answer.SetException(e);
-            public void CompleteElimination(IReadOnlyList<int> indices) => _elimination.SetResult(indices);
+            public void CompleteElimination(IReadOnlyList<int> indices, int remaining = 1) =>
+                _elimination.SetResult(new FiftyFiftyResult(indices, remaining));
         }
     }
 }

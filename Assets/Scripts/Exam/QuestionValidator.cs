@@ -33,10 +33,23 @@ namespace ExamCards.Exam
             var count = question.Original.Answers.Count;
             if (review.CorrectIndex < 0 || review.CorrectIndex >= count)
                 throw new FormatException($"Question {question.Id}: invalid correct answer {review.CorrectIndex}.");
+            if (review.AnsweredIndex is int answered && (answered < 0 || answered >= count))
+                throw new FormatException($"Question {question.Id}: invalid recorded answer {answered}.");
 
             ValidatePromptReview(question.Id, review.Original, count);
             if (review.Simplified != null)
                 ValidatePromptReview(question.Id, review.Simplified, count);
+        }
+
+        /// <exception cref="FormatException">The indices aren't distinct answers, would remove every answer, or the
+        /// charges left are negative.</exception>
+        public static void ValidateFiftyFifty(Question question, FiftyFiftyResult result)
+        {
+            if (result == null)
+                throw new FormatException($"Question {question.Id}: 50/50 returned nothing.");
+            if (result.Remaining < 0)
+                throw new FormatException($"Question {question.Id}: 50/50 left {result.Remaining} charges.");
+            ValidateEliminated(question, result.Eliminated);
         }
 
         /// <exception cref="FormatException">The indices aren't distinct answers, or would remove every answer.</exception>

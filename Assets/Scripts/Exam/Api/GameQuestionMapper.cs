@@ -19,7 +19,23 @@ namespace ExamCards.Exam.Api
             if (string.IsNullOrEmpty(round.round_id))
                 throw new FormatException("The round has no id.");
 
-            var originals = round.items ?? Array.Empty<GameQuestionDto>();
+            return JoinQuestions(round.items, round.simplified);
+        }
+
+        /// <returns>The batch's questions in order, with their simplified versions joined by id.</returns>
+        /// <exception cref="FormatException">The batch is for another index, or inconsistent.</exception>
+        public static IReadOnlyList<Question> BuildBatch(GameRoundBatchDto batch, int batchIndex)
+        {
+            if (batch == null)
+                throw new FormatException($"Batch {batchIndex}: the response is empty.");
+            if (batch.batch_index != batchIndex)
+                throw new FormatException($"Batch {batchIndex}: the response is for batch {batch.batch_index}.");
+            return JoinQuestions(batch.items, batch.simplified);
+        }
+
+        static IReadOnlyList<Question> JoinQuestions(GameQuestionDto[] items, GameQuestionDto[] simplifiedItems)
+        {
+            var originals = items ?? Array.Empty<GameQuestionDto>();
             var originalIds = new HashSet<string>();
             foreach (var original in originals)
             {
@@ -32,7 +48,7 @@ namespace ExamCards.Exam.Api
             }
 
             var simplifiedById = new Dictionary<string, GameQuestionDto>();
-            foreach (var simplified in round.simplified ?? Array.Empty<GameQuestionDto>())
+            foreach (var simplified in simplifiedItems ?? Array.Empty<GameQuestionDto>())
             {
                 if (simplified == null || string.IsNullOrEmpty(simplified.id))
                     throw new FormatException("A simplified question has no id.");
@@ -108,19 +124,25 @@ namespace ExamCards.Exam.Api
             return question;
         }
 
-        /// <exception cref="FormatException">The response is for another answer, or contradicts itself.</exception>
-        public static AnswerReview ToReview(GameAnswerResultDto result, string questionId, int answerIndex)
+        /// <param name="answerIndex">The answer sent; null for a recorded answer, which may be any.</param>
+        /// <exception cref="FormatException">The response is for another answer, incomplete, or contradicts itself.</exception>
+        public static AnswerReview ToReview(GameAnswerResultDto result, string questionId, int? answerIndex)
         {
             if (result == null)
                 throw new FormatException($"Question {questionId}: the answer response is empty.");
-            if (result.question_id != questionId || result.answer_index != answerIndex)
+            if (result.question_id != questionId || (answerIndex.HasValue && result.answer_index != answerIndex.Value))
                 throw new FormatException($"Question {questionId}: the answer response is for question {result.question_id}, answer {result.answer_index}.");
-            if (result.is_correct != (result.correct_index == answerIndex))
+            if (result.is_correct != (result.correct_index == result.answer_index))
                 throw new FormatException($"Question {questionId}: the answer response contradicts itself about the correct answer.");
+            // JsonUtility fills a missing field with its default (correct_index 0, empty review) instead of failing,
+            // and every playable question has at least two answers, so an empty feedback list means a missing review.
+            if (result.original?.feedbacks == null || result.original.feedbacks.Length == 0)
+                throw new FormatException($"Question {questionId}: the answer response has no review.");
 
             // QuestionValidator.ValidateReview checks the index range and feedback counts against the question.
             return new AnswerReview
             {
+                AnsweredIndex = result.answer_index,
                 CorrectIndex = result.correct_index,
                 Original = ToPromptReview(result.original),
                 Simplified = result.has_simplified ? ToPromptReview(result.simplified) : null,
@@ -128,13 +150,14 @@ namespace ExamCards.Exam.Api
         }
 
         /// <exception cref="FormatException">The response is for another question.</exception>
-        public static IReadOnlyList<int> ToEliminated(GameFiftyFiftyResultDto result, string questionId)
+        public static FiftyFiftyResult ToFiftyFifty(GameFiftyFiftyResultDto result, string questionId)
         {
             if (result == null)
                 throw new FormatException($"Question {questionId}: the 50/50 response is empty.");
             if (result.question_id != questionId)
                 throw new FormatException($"Question {questionId}: the 50/50 response is for question {result.question_id}.");
-            return result.eliminated_indices ?? Array.Empty<int>();
+            // QuestionValidator.ValidateFiftyFifty checks the indices and the count against the question.
+            return new FiftyFiftyResult(result.eliminated_indices ?? Array.Empty<int>(), result.fifty_fifty_remaining);
         }
 
         static QuestionPrompt ToPrompt(GameQuestionDto dto)

@@ -7,7 +7,7 @@ namespace ExamCards.Exam.Tests
 {
     public class GameQuestionMapperTests
     {
-        // Same shape as a real POST /game/rounds response; answers deliberately out of order.
+        // Same shape as a real POST /v1/game/rounds response; answers deliberately out of order.
         internal const string RoundJson = @"{
             ""round_id"": ""r1"",
             ""items"": [{
@@ -199,12 +199,37 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void ToEliminated_ForAnotherQuestion_Throws()
+        public void ToFiftyFifty_ForAnotherQuestion_Throws_AndKeepsTheServerCount()
         {
-            var result = new GameFiftyFiftyResultDto { question_id = "q2", eliminated_indices = new[] { 0, 2 } };
+            var result = new GameFiftyFiftyResultDto
+            {
+                question_id = "q2", eliminated_indices = new[] { 0, 2 }, fifty_fifty_remaining = 1,
+            };
 
-            Assert.Throws<FormatException>(() => GameQuestionMapper.ToEliminated(result, "q1"));
-            CollectionAssert.AreEqual(new[] { 0, 2 }, GameQuestionMapper.ToEliminated(result, "q2"));
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToFiftyFifty(result, "q1"));
+            var mapped = GameQuestionMapper.ToFiftyFifty(result, "q2");
+            CollectionAssert.AreEqual(new[] { 0, 2 }, mapped.Eliminated);
+            Assert.AreEqual(1, mapped.Remaining);
+        }
+
+        [Test]
+        public void ToReview_RecordedAnswer_AcceptsAnyIndex_AndSaysWhichCounted()
+        {
+            var result = ParseAnswer();
+
+            var review = GameQuestionMapper.ToReview(result, "q1", null);
+
+            Assert.AreEqual(result.answer_index, review.AnsweredIndex);
+        }
+
+        [Test]
+        public void ToReview_WithoutAReview_Throws()
+        {
+            // JsonUtility leaves a missing object with default fields instead of failing.
+            var result = JsonUtility.FromJson<GameAnswerResultDto>(
+                "{\"question_id\":\"q1\",\"answer_index\":0,\"is_correct\":false,\"correct_index\":1}");
+
+            Assert.Throws<FormatException>(() => GameQuestionMapper.ToReview(result, "q1", 0));
         }
     }
 }

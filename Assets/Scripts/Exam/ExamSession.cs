@@ -7,14 +7,18 @@ namespace ExamCards.Exam
 {
     public readonly struct AnswerResult
     {
-        public AnswerResult(bool isCorrect, int correctIndex)
+        public AnswerResult(bool isCorrect, int correctIndex, int answeredIndex)
         {
             IsCorrect = isCorrect;
             CorrectIndex = correctIndex;
+            AnsweredIndex = answeredIndex;
         }
 
         public bool IsCorrect { get; }
         public int CorrectIndex { get; }
+
+        /// <summary>The answer that counted: the one picked, or an earlier one the round had already recorded.</summary>
+        public int AnsweredIndex { get; }
     }
 
     /// <summary>What <see cref="ExamSession.PlayNowAsync"/> did.</summary>
@@ -33,6 +37,8 @@ namespace ExamCards.Exam
     /// <summary>
     /// Walks through a round's questions one by one and keeps the score. Answers and 50/50 go through
     /// the <see cref="IExamRound"/>, which holds the answer key; only one such request runs at a time.
+    /// When the loaded questions run out, <see cref="LoadMoreAsync"/> continues the same round with questions it
+    /// hasn't had, so nothing repeats, until the round has no more or the lives are gone.
     /// </summary>
     public sealed class ExamSession
     {
@@ -51,6 +57,9 @@ namespace ExamCards.Exam
         // By question id, because a question skipped by PlayNowAsync keeps what 50/50 removed from it.
         readonly Dictionary<string, HashSet<int>> _eliminated = new Dictionary<string, HashSet<int>>();
 
+        // Set once the round returned no new questions.
+        bool _exhausted;
+
         public ExamSession(IExamRound round)
         {
             _round = round ?? throw new ArgumentNullException(nameof(round));
@@ -66,6 +75,19 @@ namespace ExamCards.Exam
 
         /// <summary>How many 50/50 uses are left in this exam.</summary>
         public int FiftyFiftyRemaining { get; private set; }
+
+        /// <summary>True while the round may have questions this exam hasn't loaded yet.</summary>
+        public bool HasMoreQuestions => !_exhausted && _round.HasMore;
+
+        /// <summary>
+        /// True when the current question is answered, it is the last one loaded, a life is left and the round
+        /// may have more: call <see cref="LoadMoreAsync"/> before <see cref="MoveNext"/>.
+        /// </summary>
+        public bool NeedsMore =>
+            !IsFinished && IsCurrentAnswered && Lives > 0 && CurrentIndex + 1 >= _questions.Count && HasMoreQuestions;
+
+        /// <summary>True if the current question is the exam's last: no lives left, or nothing more to load.</summary>
+        public bool IsLastQuestion => Lives <= 0 || (CurrentIndex + 1 >= _questions.Count && !HasMoreQuestions);
 
         /// <summary>True if the current question has had its wrong answers removed.</summary>
         public bool IsCurrentEliminated => _eliminated.ContainsKey(Current.Id);
@@ -145,14 +167,16 @@ namespace ExamCards.Exam
             }
             QuestionValidator.ValidateReview(question, review);
 
-            AnsweredIndex = optionIndex;
+            // Normally the pick; after a lost response, the answer the round recorded first.
+            var answered = review.AnsweredIndex ?? optionIndex;
+            AnsweredIndex = answered;
             CurrentReview = review;
-            var isCorrect = optionIndex == review.CorrectIndex;
+            var isCorrect = answered == review.CorrectIndex;
             if (isCorrect)
                 Score++;
             else
                 Lives--;
-            return new AnswerResult(isCorrect, review.CorrectIndex);
+            return new AnswerResult(isCorrect, review.CorrectIndex, answered);
         }
 
         /// <summary>
@@ -166,20 +190,21 @@ namespace ExamCards.Exam
                 return false;
 
             var question = Current;
-            IReadOnlyList<int> eliminated;
+            FiftyFiftyResult result;
             IsBusy = true;
             try
             {
-                eliminated = await _round.EliminateAsync(question.Id, cancellationToken);
+                result = await _round.EliminateAsync(question.Id, cancellationToken);
             }
             finally
             {
                 IsBusy = false;
             }
-            QuestionValidator.ValidateEliminated(question, eliminated);
+            QuestionValidator.ValidateFiftyFifty(question, result);
 
-            _eliminated[question.Id] = new HashSet<int>(eliminated);
-            FiftyFiftyRemaining--;
+            _eliminated[question.Id] = new HashSet<int>(result.Eliminated);
+            // The round counts the charges; its number wins, so the two can't drift apart.
+            FiftyFiftyRemaining = result.Remaining;
             return true;
         }
 
@@ -193,13 +218,16 @@ namespace ExamCards.Exam
         }
 
         /// <summary>Advances to the next question. Returns false when the exam is over.</summary>
+        /// <exception cref="InvalidOperationException">Unanswered, busy, or <see cref="NeedsMore"/> (load first).</exception>
         public bool MoveNext()
         {
             if (!IsCurrentAnswered)
                 throw new InvalidOperationException("The current question has not been answered.");
             if (IsBusy)
                 throw new InvalidOperationException("A request is still running.");
-            if (Lives <= 0 || CurrentIndex + 1 >= _questions.Count)
+            if (NeedsMore)
+                throw new InvalidOperationException("The loaded questions are used up; call LoadMoreAsync first.");
+            if (IsLastQuestion)
             {
                 IsFinished = true;
                 return false;
@@ -208,6 +236,47 @@ namespace ExamCards.Exam
             CurrentIndex++;
             ResetCurrent();
             return true;
+        }
+
+        /// <summary>
+        /// Loads the round's next questions after the loaded ones. Returns how many were added; 0 means the round
+        /// has no more, and <see cref="MoveNext"/> then finishes the exam. If the request fails, nothing changes
+        /// and it can be called again (the round returns the same batch).
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Busy, finished, or out of lives.</exception>
+        /// <exception cref="FormatException">The round returned a question that doesn't fit.</exception>
+        public async Task<int> LoadMoreAsync(CancellationToken cancellationToken = default)
+        {
+            if (IsBusy)
+                throw new InvalidOperationException("A request is still running.");
+            if (IsFinished || Lives <= 0)
+                throw new InvalidOperationException("The exam is over.");
+            if (_exhausted)
+                return 0;
+
+            IReadOnlyList<Question> fetched;
+            IsBusy = true;
+            try
+            {
+                fetched = await _round.FetchMoreAsync(cancellationToken);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+
+            var added = new List<Question>();
+            foreach (var question in fetched ?? Array.Empty<Question>())
+            {
+                QuestionValidator.ValidateQuestion(question);
+                // The round never repeats a question; skip one anyway rather than show it twice.
+                if (IndexOf(question.Id) < 0 && added.TrueForAll(q => q.Id != question.Id))
+                    added.Add(question);
+            }
+            _questions.AddRange(added);
+            if (added.Count == 0)
+                _exhausted = true;
+            return added.Count;
         }
 
         /// <summary>

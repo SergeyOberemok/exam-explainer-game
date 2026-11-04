@@ -8,8 +8,9 @@ namespace ExamCards.Exam
 {
     /// <summary>
     /// A round that holds its own answer key, for the mock and tests. It follows the backend's round rules:
-    /// one answer per question (the same answer again repeats the result), and 50/50 once per unanswered
-    /// question within the round's charges. Questions from <c>catalog</c> can be added to the round.
+    /// one answer per question (asking again returns the recorded answer), and 50/50 once per unanswered
+    /// question within the round's charges. Questions from <c>catalog</c> can be added to the round, and
+    /// <c>more</c> supplies later batches, without anything the round already has.
     /// </summary>
     public sealed class LocalExamRound : IExamRound
     {
@@ -17,18 +18,25 @@ namespace ExamCards.Exam
         readonly Dictionary<string, int> _answers = new Dictionary<string, int>();
         readonly Dictionary<string, IReadOnlyList<int>> _eliminated = new Dictionary<string, IReadOnlyList<int>>();
         readonly Dictionary<string, KeyedQuestion> _catalog = new Dictionary<string, KeyedQuestion>();
+        readonly List<KeyedQuestion> _more;
+        readonly int _batchSize;
         readonly Random _random;
         int _chargesLeft;
 
         /// <param name="catalog">Questions that <see cref="AddQuestionAsync"/> may add; none if null.</param>
+        /// <param name="more">Questions <see cref="FetchMoreAsync"/> hands out, in order; none if null.</param>
+        /// <param name="batchSize">How many questions one <see cref="FetchMoreAsync"/> returns at most.</param>
         /// <exception cref="FormatException">A question or its review is inconsistent, or an id repeats.</exception>
         public LocalExamRound(IReadOnlyList<KeyedQuestion> questions, Random random = null,
-            int fiftyFiftyCharges = ExamSession.DefaultFiftyFiftyCharges, IEnumerable<KeyedQuestion> catalog = null)
+            int fiftyFiftyCharges = ExamSession.DefaultFiftyFiftyCharges, IEnumerable<KeyedQuestion> catalog = null,
+            IEnumerable<KeyedQuestion> more = null, int batchSize = 10)
         {
             if (questions == null)
                 throw new ArgumentNullException(nameof(questions));
             if (fiftyFiftyCharges < 0)
                 throw new ArgumentOutOfRangeException(nameof(fiftyFiftyCharges));
+            if (batchSize < 1)
+                throw new ArgumentOutOfRangeException(nameof(batchSize));
 
             foreach (var keyed in questions)
             {
@@ -45,6 +53,15 @@ namespace ExamCards.Exam
                 _catalog[keyed.Question.Id] = keyed;
             }
 
+            _more = new List<KeyedQuestion>();
+            foreach (var keyed in more ?? Enumerable.Empty<KeyedQuestion>())
+            {
+                QuestionValidator.ValidateQuestion(keyed?.Question);
+                QuestionValidator.ValidateReview(keyed.Question, keyed.Review);
+                _more.Add(keyed);
+            }
+            _batchSize = batchSize;
+
             Questions = questions.Select(keyed => keyed.Question).ToList();
             FiftyFiftyCharges = fiftyFiftyCharges;
             _chargesLeft = fiftyFiftyCharges;
@@ -53,6 +70,7 @@ namespace ExamCards.Exam
 
         public IReadOnlyList<Question> Questions { get; }
         public int FiftyFiftyCharges { get; }
+        public bool HasMore => _more.Any(keyed => !_byId.ContainsKey(keyed.Question.Id));
 
         public Task<AnswerReview> SubmitAnswerAsync(string questionId, int answerIndex, CancellationToken cancellationToken = default)
         {
@@ -60,9 +78,8 @@ namespace ExamCards.Exam
             var keyed = Find(questionId);
             if (_answers.TryGetValue(questionId, out var previous))
             {
-                if (previous == answerIndex)
-                    return Task.FromResult(keyed.Review);
-                throw new InvalidOperationException($"Question {questionId} has already been answered.");
+                // Like the backend: the recorded answer counts, also when another one is sent later.
+                return Task.FromResult(previous == answerIndex ? keyed.Review : keyed.Review.WithAnsweredIndex(previous));
             }
             if (answerIndex < 0 || answerIndex >= keyed.Question.Original.Answers.Count)
                 throw new ArgumentOutOfRangeException(nameof(answerIndex));
@@ -73,12 +90,12 @@ namespace ExamCards.Exam
             return Task.FromResult(keyed.Review);
         }
 
-        public Task<IReadOnlyList<int>> EliminateAsync(string questionId, CancellationToken cancellationToken = default)
+        public Task<FiftyFiftyResult> EliminateAsync(string questionId, CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var keyed = Find(questionId);
             if (_eliminated.TryGetValue(questionId, out var already))
-                return Task.FromResult(already);
+                return Task.FromResult(new FiftyFiftyResult(already, _chargesLeft));
             if (_answers.ContainsKey(questionId))
                 throw new InvalidOperationException($"Question {questionId} has already been answered.");
             if (_chargesLeft <= 0)
@@ -101,7 +118,7 @@ namespace ExamCards.Exam
 
             _eliminated[questionId] = picked;
             _chargesLeft--;
-            return Task.FromResult<IReadOnlyList<int>>(picked);
+            return Task.FromResult(new FiftyFiftyResult(picked, _chargesLeft));
         }
 
         public Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
@@ -114,6 +131,15 @@ namespace ExamCards.Exam
 
             _byId.Add(questionId, keyed);
             return Task.FromResult(keyed.Question);
+        }
+
+        public Task<IReadOnlyList<Question>> FetchMoreAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var batch = _more.Where(keyed => !_byId.ContainsKey(keyed.Question.Id)).Take(_batchSize).ToList();
+            foreach (var keyed in batch)
+                _byId.Add(keyed.Question.Id, keyed);
+            return Task.FromResult<IReadOnlyList<Question>>(batch.Select(keyed => keyed.Question).ToList());
         }
 
         KeyedQuestion Find(string questionId) =>
