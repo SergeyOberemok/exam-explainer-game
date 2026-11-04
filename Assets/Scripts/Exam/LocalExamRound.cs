@@ -9,19 +9,21 @@ namespace ExamCards.Exam
     /// <summary>
     /// A round that holds its own answer key, for the mock and tests. It follows the backend's round rules:
     /// one answer per question (the same answer again repeats the result), and 50/50 once per unanswered
-    /// question within the round's charges.
+    /// question within the round's charges. Questions from <c>catalog</c> can be added to the round.
     /// </summary>
     public sealed class LocalExamRound : IExamRound
     {
         readonly Dictionary<string, KeyedQuestion> _byId = new Dictionary<string, KeyedQuestion>();
         readonly Dictionary<string, int> _answers = new Dictionary<string, int>();
         readonly Dictionary<string, IReadOnlyList<int>> _eliminated = new Dictionary<string, IReadOnlyList<int>>();
+        readonly Dictionary<string, KeyedQuestion> _catalog = new Dictionary<string, KeyedQuestion>();
         readonly Random _random;
         int _chargesLeft;
 
+        /// <param name="catalog">Questions that <see cref="AddQuestionAsync"/> may add; none if null.</param>
         /// <exception cref="FormatException">A question or its review is inconsistent, or an id repeats.</exception>
         public LocalExamRound(IReadOnlyList<KeyedQuestion> questions, Random random = null,
-            int fiftyFiftyCharges = ExamSession.DefaultFiftyFiftyCharges)
+            int fiftyFiftyCharges = ExamSession.DefaultFiftyFiftyCharges, IEnumerable<KeyedQuestion> catalog = null)
         {
             if (questions == null)
                 throw new ArgumentNullException(nameof(questions));
@@ -34,6 +36,13 @@ namespace ExamCards.Exam
                 QuestionValidator.ValidateReview(keyed.Question, keyed.Review);
                 if (!_byId.TryAdd(keyed.Question.Id, keyed))
                     throw new FormatException($"Question {keyed.Question.Id}: listed more than once.");
+            }
+
+            foreach (var keyed in catalog ?? Enumerable.Empty<KeyedQuestion>())
+            {
+                QuestionValidator.ValidateQuestion(keyed?.Question);
+                QuestionValidator.ValidateReview(keyed.Question, keyed.Review);
+                _catalog[keyed.Question.Id] = keyed;
             }
 
             Questions = questions.Select(keyed => keyed.Question).ToList();
@@ -93,6 +102,18 @@ namespace ExamCards.Exam
             _eliminated[questionId] = picked;
             _chargesLeft--;
             return Task.FromResult<IReadOnlyList<int>>(picked);
+        }
+
+        public Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (questionId != null && _byId.TryGetValue(questionId, out var existing))
+                return Task.FromResult(existing.Question);
+            if (questionId == null || !_catalog.TryGetValue(questionId, out var keyed))
+                throw new ArgumentException($"Question {questionId} was not found.", nameof(questionId));
+
+            _byId.Add(questionId, keyed);
+            return Task.FromResult(keyed.Question);
         }
 
         KeyedQuestion Find(string questionId) =>

@@ -17,6 +17,19 @@ namespace ExamCards.Exam
         public int CorrectIndex { get; }
     }
 
+    /// <summary>What <see cref="ExamSession.PlayNowAsync"/> did.</summary>
+    public enum PlayNowOutcome
+    {
+        /// <summary>The question is now the current one.</summary>
+        Moved,
+
+        /// <summary>The question was already the current one; nothing changed.</summary>
+        AlreadyCurrent,
+
+        /// <summary>The question was already answered in this exam; nothing changed.</summary>
+        AlreadyAnswered,
+    }
+
     /// <summary>
     /// Walks through a round's questions one by one and keeps the score. Answers and 50/50 go through
     /// the <see cref="IExamRound"/>, which holds the answer key; only one such request runs at a time.
@@ -33,28 +46,32 @@ namespace ExamCards.Exam
         public const int MaxLives = 3;
 
         readonly IExamRound _round;
-        readonly IReadOnlyList<Question> _questions;
-        readonly HashSet<int> _eliminated = new HashSet<int>();
+        readonly List<Question> _questions;
+
+        // By question id, because a question skipped by PlayNowAsync keeps what 50/50 removed from it.
+        readonly Dictionary<string, HashSet<int>> _eliminated = new Dictionary<string, HashSet<int>>();
 
         public ExamSession(IExamRound round)
         {
             _round = round ?? throw new ArgumentNullException(nameof(round));
-            _questions = round.Questions ?? throw new ArgumentException("The round has no question list.", nameof(round));
+            _questions = new List<Question>(
+                round.Questions ?? throw new ArgumentException("The round has no question list.", nameof(round)));
             if (_questions.Count == 0)
                 throw new ArgumentException("An exam needs at least one question.", nameof(round));
             FiftyFiftyRemaining = Math.Max(0, round.FiftyFiftyCharges);
         }
 
-        /// <summary>True while an answer or 50/50 request for the current question is running.</summary>
+        /// <summary>True while an answer, 50/50 or play-now request is running.</summary>
         public bool IsBusy { get; private set; }
 
         /// <summary>How many 50/50 uses are left in this exam.</summary>
         public int FiftyFiftyRemaining { get; private set; }
 
         /// <summary>True if the current question has had its wrong answers removed.</summary>
-        public bool IsCurrentEliminated => _eliminated.Count > 0;
+        public bool IsCurrentEliminated => _eliminated.ContainsKey(Current.Id);
 
-        public bool IsEliminated(int optionIndex) => _eliminated.Contains(optionIndex);
+        public bool IsEliminated(int optionIndex) =>
+            _eliminated.TryGetValue(Current.Id, out var eliminated) && eliminated.Contains(optionIndex);
 
         /// <summary>True if 50/50 can be used on the current question right now.</summary>
         public bool CanEliminate =>
@@ -161,8 +178,7 @@ namespace ExamCards.Exam
             }
             QuestionValidator.ValidateEliminated(question, eliminated);
 
-            foreach (var index in eliminated)
-                _eliminated.Add(index);
+            _eliminated[question.Id] = new HashSet<int>(eliminated);
             FiftyFiftyRemaining--;
             return true;
         }
@@ -181,6 +197,8 @@ namespace ExamCards.Exam
         {
             if (!IsCurrentAnswered)
                 throw new InvalidOperationException("The current question has not been answered.");
+            if (IsBusy)
+                throw new InvalidOperationException("A request is still running.");
             if (Lives <= 0 || CurrentIndex + 1 >= _questions.Count)
             {
                 IsFinished = true;
@@ -188,11 +206,75 @@ namespace ExamCards.Exam
             }
 
             CurrentIndex++;
+            ResetCurrent();
+            return true;
+        }
+
+        /// <summary>
+        /// Where a question is in play order, or -1 if it isn't in this exam. Questions before
+        /// <see cref="CurrentIndex"/> have been answered.
+        /// </summary>
+        public int IndexOf(string questionId) => _questions.FindIndex(q => q.Id == questionId);
+
+        /// <summary>True if <see cref="PlayNowAsync"/> can run now.</summary>
+        public bool CanPlayNow => !IsBusy && !IsFinished && Lives > 0;
+
+        /// <summary>
+        /// Makes a question, such as a search result, the current one. A question not yet in the exam is first
+        /// added to the round and then counts towards the total. If the current question is unanswered, it is
+        /// shown again right after; nothing about it is lost. If the request fails, nothing changes.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Finished, out of lives, or busy (see <see cref="CanPlayNow"/>).</exception>
+        /// <exception cref="FormatException">The round returned a question that doesn't fit.</exception>
+        public async Task<PlayNowOutcome> PlayNowAsync(string questionId, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrEmpty(questionId))
+                throw new ArgumentException("No question id.", nameof(questionId));
+            if (!CanPlayNow)
+                throw new InvalidOperationException(IsBusy ? "A request is still running." : "The exam is over.");
+
+            var index = IndexOf(questionId);
+            if (index == CurrentIndex)
+                return PlayNowOutcome.AlreadyCurrent;
+            // Everything before the current question has been answered.
+            if (index >= 0 && index < CurrentIndex)
+                return PlayNowOutcome.AlreadyAnswered;
+
+            Question question;
+            if (index >= 0)
+            {
+                question = _questions[index];
+                _questions.RemoveAt(index);
+            }
+            else
+            {
+                IsBusy = true;
+                try
+                {
+                    question = await _round.AddQuestionAsync(questionId, cancellationToken);
+                }
+                finally
+                {
+                    IsBusy = false;
+                }
+                QuestionValidator.ValidateQuestion(question);
+                if (question.Id != questionId)
+                    throw new FormatException($"Question {questionId}: the round added question {question.Id} instead.");
+            }
+
+            // An answered current question stays where it is; an unanswered one moves up behind the new one.
+            if (IsCurrentAnswered)
+                CurrentIndex++;
+            _questions.Insert(CurrentIndex, question);
+            ResetCurrent();
+            return PlayNowOutcome.Moved;
+        }
+
+        void ResetCurrent()
+        {
             AnsweredIndex = null;
             CurrentReview = null;
             IsCurrentRevealed = false;
-            _eliminated.Clear();
-            return true;
         }
     }
 }

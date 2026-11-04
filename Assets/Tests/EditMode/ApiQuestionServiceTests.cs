@@ -147,6 +147,125 @@ namespace ExamCards.Exam.Tests
             Assert.Throws<ArgumentException>(() => new ApiQuestionService(baseUrl, 10, 15, new FakeTransport()));
         }
 
+        const string SearchJson = @"{
+            ""items"": [
+                {""id"": ""s1"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
+                 ""question"": ""What is CORS?"", ""answers"": [{""index"": 1, ""text"": ""B""}, {""index"": 0, ""text"": ""A""}]},
+                {""id"": ""s2"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
+                 ""question"": ""What is DNS?"", ""answers"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}]}
+            ],
+            ""total"": 2
+        }";
+
+        const string AddedJson = @"{
+            ""item"": {""id"": ""s1"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
+                       ""question"": ""What is CORS?"", ""answers"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}]},
+            ""simplified"": [{""id"": ""s1"", ""simplified"": true, ""section"": ""Web"", ""assessment_type"": ""mc"",
+                       ""question"": ""CORS?"", ""answers"": [{""index"": 0, ""text"": ""a""}, {""index"": 1, ""text"": ""b""}]}]
+        }";
+
+        [Test]
+        public void Search_GetsWithAnEscapedQuery_AndMapsTheResults()
+        {
+            var transport = new FakeTransport().Reply(200, SearchJson);
+            var service = new ApiQuestionService(BaseUrl, 10, timeoutSeconds: 7, transport, searchLimit: 3);
+
+            var results = Run(service.SearchAsync("  a&b c/d  "));
+
+            var request = transport.Requests[0];
+            Assert.AreEqual("GET", request.Method);
+            Assert.AreEqual("http://api.test/search/game-questions?q=a%26b%20c%2Fd&limit=3", request.Url);
+            Assert.IsNull(request.Body);
+            Assert.AreEqual(new[] { "s1", "s2" }, new[] { results[0].Id, results[1].Id });
+            CollectionAssert.AreEqual(new[] { "A", "B" }, results[0].Original.Answers);
+            Assert.IsFalse(results[0].CanReveal);
+        }
+
+        [Test]
+        public void Search_ClampsTheLimit()
+        {
+            var transport = new FakeTransport().Reply(200, "{\"items\":[],\"total\":0}");
+            var service = new ApiQuestionService(BaseUrl, 10, 7, transport, searchLimit: 500);
+
+            Assert.AreEqual(0, Run(service.SearchAsync("caching")).Count);
+            StringAssert.EndsWith($"&limit={ExamApiSettings.MaxSearchLimit}", transport.Requests[0].Url);
+        }
+
+        [Test]
+        public void Search_TooShort_ThrowsWithoutARequest()
+        {
+            var transport = new FakeTransport();
+
+            Assert.Throws<ArgumentException>(() => Run(MakeService(transport).SearchAsync(" a ")));
+            Assert.AreEqual(0, transport.Requests.Count);
+        }
+
+        [Test]
+        public void Search_RejectsDuplicateOrSimplifiedResults()
+        {
+            var duplicate = new FakeTransport().Reply(200, SearchJson.Replace("\"s2\"", "\"s1\""));
+            Assert.Throws<FormatException>(() => Run(MakeService(duplicate).SearchAsync("cors")));
+
+            var simplified = new FakeTransport().Reply(200,
+                SearchJson.Replace("\"id\": \"s2\", \"simplified\": false", "\"id\": \"s2\", \"simplified\": true"));
+            Assert.Throws<FormatException>(() => Run(MakeService(simplified).SearchAsync("cors")));
+        }
+
+        [Test]
+        public void AddQuestion_PostsToTheRound_AndReturnsTheQuestionWithItsSimplifiedText()
+        {
+            var transport = new FakeTransport()
+                .Reply(201, GameQuestionMapperTests.RoundJson)
+                .Reply(200, AddedJson);
+            var round = Run(MakeService(transport).StartRoundAsync());
+
+            var question = Run(round.AddQuestionAsync("s1"));
+
+            var request = transport.Requests[1];
+            Assert.AreEqual("POST", request.Method);
+            Assert.AreEqual("http://api.test/game/rounds/r1/questions", request.Url);
+            Assert.AreEqual("{\"question_id\":\"s1\"}", request.Body);
+            Assert.AreEqual("s1", question.Id);
+            Assert.AreEqual("CORS?", question.Simplified.Question);
+        }
+
+        [Test]
+        public void AddQuestion_WithoutSimplifiedText_CannotReveal()
+        {
+            var transport = new FakeTransport()
+                .Reply(201, GameQuestionMapperTests.RoundJson)
+                .Reply(200, "{\"item\":{\"id\":\"s1\",\"question\":\"Q\",\"answers\":[{\"index\":0,\"text\":\"A\"}]},\"simplified\":[]}");
+            var round = Run(MakeService(transport).StartRoundAsync());
+
+            Assert.IsFalse(Run(round.AddQuestionAsync("s1")).CanReveal);
+        }
+
+        [Test]
+        [TestCase("s9")]
+        [TestCase("")]
+        public void AddQuestion_ForAnotherQuestion_Throws(string returnedId)
+        {
+            var transport = new FakeTransport()
+                .Reply(201, GameQuestionMapperTests.RoundJson)
+                .Reply(200, AddedJson.Replace("\"s1\"", returnedId.Length == 0 ? "\"\"" : $"\"{returnedId}\""));
+            var round = Run(MakeService(transport).StartRoundAsync());
+
+            Assert.Throws<FormatException>(() => Run(round.AddQuestionAsync("s1")));
+        }
+
+        [Test]
+        public void AddQuestion_NotFound_ThrowsTheDetail()
+        {
+            var transport = new FakeTransport()
+                .Reply(201, GameQuestionMapperTests.RoundJson)
+                .Reply(404, "{\"detail\":\"question not found\"}");
+            var round = Run(MakeService(transport).StartRoundAsync());
+
+            var e = Assert.Throws<ApiException>(() => Run(round.AddQuestionAsync("s1")));
+            Assert.AreEqual(404, e.StatusCode);
+            Assert.AreEqual("question not found", e.Detail);
+        }
+
         [TestCase("http://127.0.0.1:8000")]
         [TestCase("https://exam.example.com/api/")]
         public void ValidBaseUrl_IsAccepted(string baseUrl)

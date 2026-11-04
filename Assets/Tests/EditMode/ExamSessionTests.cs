@@ -449,12 +449,177 @@ namespace ExamCards.Exam.Tests
                 Assert.IsFalse(session.IsEliminated(i));
         }
 
+        static ExamSession MakeSessionWithCatalog(KeyedQuestion[] questions, params KeyedQuestion[] catalog) =>
+            new ExamSession(new LocalExamRound(questions, catalog: catalog));
+
+        static PlayNowOutcome PlayNow(ExamSession session, string id) => Run(session.PlayNowAsync(id));
+
+        [Test]
+        public void PlayNow_AfterAnswering_AddsTheQuestionNextAndCountsIt()
+        {
+            var first = MakeQuestion(0);
+            var second = MakeQuestion(0);
+            var found = MakeQuestion(2);
+            var session = MakeSessionWithCatalog(new[] { first, second }, found);
+            Answer(session, 0);
+
+            Assert.AreEqual(PlayNowOutcome.Moved, PlayNow(session, found.Question.Id));
+
+            Assert.AreEqual(1, session.CurrentIndex);
+            Assert.AreSame(found.Question, session.Current);
+            Assert.AreEqual(3, session.Total);
+            Assert.IsFalse(session.IsCurrentAnswered);
+            Assert.IsTrue(Answer(session, 2).IsCorrect);
+            Assert.AreEqual(2, session.Score);
+            Assert.IsTrue(session.MoveNext());
+            Assert.AreSame(second.Question, session.Current);
+        }
+
+        [Test]
+        public void PlayNow_FromAnUnansweredQuestion_ShowsItAgainRightAfter_WithItsEliminatedAnswers()
+        {
+            var skipped = MakeQuestion(0);
+            var found = MakeQuestion(1);
+            var session = new ExamSession(new LocalExamRound(new[] { skipped }, new Random(1), 2, new[] { found }));
+            Eliminate(session);
+            session.Reveal();
+            var eliminated = Enumerable.Range(0, 4).Where(session.IsEliminated).ToList();
+
+            PlayNow(session, found.Question.Id);
+
+            Assert.AreEqual(0, session.CurrentIndex);
+            Assert.AreSame(found.Question, session.Current);
+            Assert.IsFalse(session.IsCurrentEliminated);
+            Assert.IsFalse(session.IsCurrentRevealed);
+            Assert.AreEqual(0, session.AnsweredCount);
+            Answer(session, 1);
+            session.MoveNext();
+            Assert.AreSame(skipped.Question, session.Current);
+            CollectionAssert.AreEqual(eliminated, Enumerable.Range(0, 4).Where(session.IsEliminated));
+            Assert.AreEqual(1, session.FiftyFiftyRemaining);
+        }
+
+        [Test]
+        public void PlayNow_ALaterQuestionOfTheRound_MovesItUpWithoutAddingIt()
+        {
+            var a = MakeQuestion(0);
+            var b = MakeQuestion(0);
+            var c = MakeQuestion(0);
+            var session = MakeSession(a, b, c);
+            Answer(session, 0);
+
+            Assert.AreEqual(PlayNowOutcome.Moved, PlayNow(session, c.Question.Id));
+
+            Assert.AreSame(c.Question, session.Current);
+            Assert.AreEqual(3, session.Total);
+            Answer(session, 0);
+            session.MoveNext();
+            Assert.AreSame(b.Question, session.Current);
+            Answer(session, 0);
+            Assert.IsFalse(session.MoveNext());
+        }
+
+        [Test]
+        public void PlayNow_TheCurrentOrAnAnsweredQuestion_ChangesNothing()
+        {
+            var a = MakeQuestion(0);
+            var b = MakeQuestion(0);
+            var session = MakeSession(a, b);
+            Answer(session, 0);
+            session.MoveNext();
+
+            Assert.AreEqual(PlayNowOutcome.AlreadyCurrent, PlayNow(session, b.Question.Id));
+            Assert.AreEqual(PlayNowOutcome.AlreadyAnswered, PlayNow(session, a.Question.Id));
+            Assert.AreSame(b.Question, session.Current);
+            Assert.AreEqual(2, session.Total);
+        }
+
+        [Test]
+        public void PlayNow_AnUnknownQuestion_ThrowsAndChangesNothing()
+        {
+            var a = MakeQuestion(0);
+            var session = MakeSession(a);
+
+            Assert.Throws<ArgumentException>(() => PlayNow(session, "missing"));
+
+            Assert.AreSame(a.Question, session.Current);
+            Assert.AreEqual(1, session.Total);
+            Assert.IsFalse(session.IsBusy);
+        }
+
+        [Test]
+        public void PlayNow_IsBusyWhileTheRoundAddsTheQuestion()
+        {
+            var round = new PendingRound(MakeQuestion(0));
+            var session = new ExamSession(round);
+            var found = MakeQuestion(1).Question;
+
+            var pending = session.PlayNowAsync(found.Id);
+
+            Assert.IsTrue(session.IsBusy);
+            Assert.IsFalse(session.CanPlayNow);
+            Assert.IsFalse(session.CanEliminate);
+            Assert.Throws<InvalidOperationException>(() => Run(session.PlayNowAsync(found.Id)));
+            round.CompleteAdd(found);
+            Assert.AreEqual(PlayNowOutcome.Moved, Run(pending));
+            Assert.AreSame(found, session.Current);
+        }
+
+        [Test]
+        public void PlayNow_WhenTheRoundAddsAnotherQuestion_ThrowsAndChangesNothing()
+        {
+            var round = new PendingRound(MakeQuestion(0));
+            var session = new ExamSession(round);
+
+            var pending = session.PlayNowAsync("wanted");
+            round.CompleteAdd(MakeQuestion(1).Question);
+
+            Assert.Throws<FormatException>(() => Run(pending));
+            Assert.AreEqual(1, session.Total);
+            Assert.IsFalse(session.IsBusy);
+        }
+
+        [Test]
+        public void PlayNow_WhenTheRequestFails_ChangesNothing()
+        {
+            var first = MakeQuestion(0);
+            var round = new PendingRound(first);
+            var session = new ExamSession(round);
+
+            var pending = session.PlayNowAsync("wanted");
+            round.FailAdd(new InvalidOperationException("offline"));
+
+            Assert.Throws<InvalidOperationException>(() => Run(pending));
+            Assert.AreSame(first.Question, session.Current);
+            Assert.IsFalse(session.IsBusy);
+        }
+
+        [Test]
+        public void PlayNow_OutOfLivesOrFinished_Throws()
+        {
+            var found = MakeQuestion(0);
+            var session = MakeSessionWithCatalog(
+                Enumerable.Range(0, ExamSession.MaxLives).Select(_ => MakeQuestion(0)).ToArray(), found);
+            for (var i = 0; i < ExamSession.MaxLives; i++)
+            {
+                Answer(session, 1);
+                if (i < ExamSession.MaxLives - 1)
+                    session.MoveNext();
+            }
+
+            Assert.IsFalse(session.CanPlayNow);
+            Assert.Throws<InvalidOperationException>(() => PlayNow(session, found.Question.Id));
+            Assert.IsFalse(session.MoveNext());
+            Assert.Throws<InvalidOperationException>(() => PlayNow(session, found.Question.Id));
+        }
+
         /// <summary>A round whose requests finish only when the test says so, like a slow server.</summary>
         sealed class PendingRound : IExamRound
         {
             readonly KeyedQuestion _question;
             TaskCompletionSource<AnswerReview> _answer;
             TaskCompletionSource<IReadOnlyList<int>> _elimination;
+            TaskCompletionSource<Question> _add;
 
             public PendingRound(KeyedQuestion question)
             {
@@ -476,6 +641,15 @@ namespace ExamCards.Exam.Tests
                 _elimination = new TaskCompletionSource<IReadOnlyList<int>>();
                 return _elimination.Task;
             }
+
+            public Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
+            {
+                _add = new TaskCompletionSource<Question>();
+                return _add.Task;
+            }
+
+            public void CompleteAdd(Question question) => _add.SetResult(question);
+            public void FailAdd(Exception e) => _add.SetException(e);
 
             public void Complete(AnswerReview review = null) => _answer.SetResult(review ?? _question.Review);
             public void Fail(Exception e) => _answer.SetException(e);

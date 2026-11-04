@@ -74,6 +74,7 @@
 .icon--pause { width: 10.5px; height: 10.5px; background-image: url("project://database/Assets/UI/PickOne/Icons/pause.svg"); }
 .icon--profile { width: 12px; height: 12px; background-image: url("project://database/Assets/UI/PickOne/Icons/profile.svg"); }
 .icon--exit { width: 12px; height: 12px; background-image: url("project://database/Assets/UI/PickOne/Icons/exit.svg"); }
+.icon--search { width: 13px; height: 13px; background-image: url("project://database/Assets/UI/PickOne/Icons/search.svg"); }
 .icon--select { width: 13px; height: 15.75px; background-image: url("project://database/Assets/UI/PickOne/Icons/select-pointer-dark.svg"); }
 .icon--heart { width: 15px; height: 13.76px; background-image: url("project://database/Assets/UI/PickOne/Icons/heart-full.svg"); }
 .icon--heart-used { background-image: url("project://database/Assets/UI/PickOne/Icons/heart.svg"); }
@@ -293,7 +294,9 @@
     margin-left: 12px;
 }
 
-.icon-button--exit:hover {
+.icon-button--exit:hover,
+.icon-button--search:hover,
+.icon-button--close:hover {
     background-color: var(--gold);
 }
 
@@ -747,4 +750,160 @@
 
 .primary-button:active {
     background-color: var(--ink);
+}
+
+/* ---------- search overlay ---------- */
+
+.search {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    padding: 88px 0 48px 0;
+    background-color: rgba(42, 23, 15, 0.6);
+}
+
+.search--hidden {
+    display: none;
+}
+
+.search__wrap {
+    width: 760px;
+    flex-shrink: 1;
+}
+
+.search__panel {
+    padding: 20px 24px 14px 24px;
+    overflow: hidden;
+}
+
+.search__strip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 4px;
+}
+
+.search__header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.search__title {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: var(--heading);
+}
+
+.search__input {
+    margin: 0;
+}
+
+.search__input > .unity-base-text-field__input {
+    height: 42px;
+    padding: 0 12px;
+    border-radius: 0;
+    border-width: 2px;
+    border-right-width: 3px;
+    border-bottom-width: 3px;
+    border-color: var(--ink);
+    background-color: var(--page);
+    font-size: 15px;
+    color: var(--ink);
+    --unity-cursor-color: var(--ink);
+    --unity-selection-color: var(--sand);
+}
+
+.search__input .unity-text-element {
+    color: var(--ink);
+    -unity-text-align: middle-left;
+}
+
+.search__input:focus > .unity-base-text-field__input {
+    border-color: var(--brand);
+    background-color: var(--white);
+}
+
+.search__status {
+    margin: 10px 0 6px 0;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: normal;
+}
+
+.search__results {
+    flex-shrink: 1;
+}
+
+.search__hint {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top-width: 1px;
+    border-color: rgba(224, 191, 186, 0.6);
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 0.33px;
+    color: var(--muted);
+    -unity-text-align: middle-center;
+}
+
+.search-result {
+    margin: 0 4px 10px 0;
+    padding: 10px 12px;
+    background-color: var(--white);
+    border-width: 2px;
+    border-right-width: 3px;
+    border-bottom-width: 3px;
+    border-color: var(--ink);
+}
+
+.search-result:hover {
+    background-color: var(--cream);
+}
+
+.search-result--selected {
+    background-color: var(--pink-soft);
+    border-color: var(--brand);
+}
+
+.search-result--answered {
+    opacity: 0.55;
+}
+
+.search-result__meta {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.search-result__meta > .chip {
+    margin-right: 6px;
+}
+
+.search-result__question {
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--heading);
+    white-space: normal;
+}
+
+.search-result__answers {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.search-result__answer {
+    margin: 4px 6px 0 0;
+    padding: 2px 8px;
+    border-width: 1px;
+    border-color: rgba(42, 23, 15, 0.35);
+    background-color: var(--page);
+    font-size: 12px;
+    color: var(--muted);
 }

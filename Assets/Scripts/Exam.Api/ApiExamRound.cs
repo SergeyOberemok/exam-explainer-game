@@ -36,5 +36,12 @@ namespace ExamCards.Exam.Api
             var result = await _client.PostAsync<GameFiftyFiftyResultDto>(_roundPath + "/fifty-fifty", request, cancellationToken);
             return GameQuestionMapper.ToEliminated(result, questionId);
         }
+
+        public async Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
+        {
+            var request = new GameRoundQuestionRequestDto { question_id = questionId };
+            var result = await _client.PostAsync<GameRoundQuestionDto>(_roundPath + "/questions", request, cancellationToken);
+            return GameQuestionMapper.ToAddedQuestion(result, questionId);
+        }
     }
 }

@@ -20,6 +20,23 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void AddQuestion_FromTheCatalog_MakesItAnswerable_AndRepeats()
+        {
+            var inRound = MakeQuestion();
+            var extra = MakeQuestion(3);
+            var round = new LocalExamRound(new[] { inRound }, catalog: new[] { extra });
+            var id = extra.Question.Id;
+
+            Assert.Throws<ArgumentException>(() => round.SubmitAnswerAsync(id, 0));
+            Assert.AreSame(extra.Question, round.AddQuestionAsync(id).Result);
+            Assert.AreSame(extra.Question, round.AddQuestionAsync(id).Result);
+            Assert.AreSame(inRound.Question, round.AddQuestionAsync(inRound.Question.Id).Result);
+            Assert.AreEqual(3, round.SubmitAnswerAsync(id, 0).Result.CorrectIndex);
+            Assert.AreEqual(1, round.Questions.Count, "Questions lists only the round's starting questions.");
+            Assert.Throws<ArgumentException>(() => round.AddQuestionAsync("nope"));
+        }
+
+        [Test]
         public void SubmitAnswer_UnknownQuestion_Throws()
         {
             var round = new LocalExamRound(new[] { MakeQuestion() });

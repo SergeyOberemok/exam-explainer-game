@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,8 +9,9 @@ namespace ExamCards.Exam
     /// <summary>
     /// Stand-in for live data, used by tests and whenever <see cref="QuestionServices.Factory"/> isn't set:
     /// starts a <see cref="LocalExamRound"/> over a fixed set of questions after a short fake latency.
+    /// Search looks through those and a few more, which can be added to the round.
     /// </summary>
-    public sealed class MockQuestionService : IQuestionService
+    public sealed class MockQuestionService : IQuestionService, IQuestionSearch
     {
         readonly int _latencyMs;
 
@@ -21,7 +24,25 @@ namespace ExamCards.Exam
         {
             if (_latencyMs > 0)
                 await Task.Delay(_latencyMs, cancellationToken);
-            return new LocalExamRound(BuildQuestions());
+            return new LocalExamRound(BuildQuestions(), catalog: BuildCatalog());
+        }
+
+        /// <summary>Case-insensitive match on the question, its answers or its section, like the backend's.</summary>
+        public async Task<IReadOnlyList<Question>> SearchAsync(string text, CancellationToken cancellationToken = default)
+        {
+            text = QuestionSearchText.Normalize(text)
+                ?? throw new ArgumentException($"Search for at least {IQuestionSearch.MinTextLength} characters.", nameof(text));
+            if (_latencyMs > 0)
+                await Task.Delay(_latencyMs, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+
+            bool Matches(string value) => value != null && value.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+            return BuildCatalog()
+                .Select(keyed => keyed.Question)
+                .Where(q => Matches(q.Original.Question) || Matches(q.Section) || q.Original.Answers.Any(Matches))
+                // Like the backend's search results: no simplified text until the question is added.
+                .Select(q => new Question { Id = q.Id, Section = q.Section, Source = q.Source, Original = q.Original })
+                .ToList();
         }
 
         sealed class Version
@@ -50,6 +71,67 @@ namespace ExamCards.Exam
                     Simplified = new PromptReview { Explanation = simplified.Explanation, Feedbacks = simplified.Feedbacks },
                 },
             };
+
+        /// <summary>Every question search can find: the round's, and some that only search reaches.</summary>
+        static IReadOnlyList<KeyedQuestion> BuildCatalog() => BuildQuestions().Concat(BuildExtraQuestions()).ToList();
+
+        static IEnumerable<KeyedQuestion> BuildExtraQuestions()
+        {
+            yield return Make("q4", "Sample: Web Fundamentals", 3,
+                new Version
+                {
+                    Question = "SCENARIO: A browser page loads data from an API on another domain, and the request fails before the API sees it. QUESTION: Which mechanism decides whether the browser may make that request?",
+                    Answers = new[] { "DNS resolution", "TLS certificate pinning", "HTTP keep-alive", "CORS (Cross-Origin Resource Sharing)" },
+                    Feedbacks = new[]
+                    {
+                        "DNS only finds the server's address; it says nothing about which pages may call it.",
+                        "Pinning restricts which certificates a client trusts, not which origins may call the API.",
+                        "Keep-alive reuses connections; it doesn't allow or block requests.",
+                        "The browser checks the API's CORS headers before letting a page on another origin read the response.",
+                    },
+                    Explanation = "Browsers block cross-origin requests unless the server allows them with CORS headers, often after a preflight request.",
+                },
+                new Version
+                {
+                    Question = "A web page can't call an API on another domain. What controls whether the browser allows it?",
+                    Answers = new[] { "DNS", "Certificate pinning", "Keep-alive", "CORS" },
+                    Feedbacks = new[]
+                    {
+                        "Wrong. DNS only finds the server.",
+                        "Wrong. That's about trusting certificates.",
+                        "Wrong. That's about reusing connections.",
+                        "Right. The server's CORS headers tell the browser what's allowed.",
+                    },
+                    Explanation = "CORS headers from the server tell the browser which other sites may call it.",
+                });
+            yield return Make("q5", "Sample: Databases", 0,
+                new Version
+                {
+                    Question = "SCENARIO: Two transfers run at the same time against the same bank account, and the final balance is wrong. QUESTION: Which database feature prevents this kind of lost update?",
+                    Answers = new[] { "Transactions with proper isolation", "A larger buffer pool", "Read replicas", "Column compression" },
+                    Feedbacks = new[]
+                    {
+                        "Isolation makes concurrent transactions behave as if they ran one after another, so no update is lost.",
+                        "More memory speeds queries up but doesn't coordinate concurrent writes.",
+                        "Replicas spread reads; the conflicting writes still hit the primary.",
+                        "Compression saves space and has nothing to do with concurrency.",
+                    },
+                    Explanation = "A lost update happens when two writes interleave. Transactions with a suitable isolation level, or row locks, serialize them.",
+                },
+                new Version
+                {
+                    Question = "Two transfers to one account at the same time leave a wrong balance. What prevents this?",
+                    Answers = new[] { "Transactions", "More memory", "Read replicas", "Compression" },
+                    Feedbacks = new[]
+                    {
+                        "Right. They keep concurrent writes from overwriting each other.",
+                        "Wrong. Memory doesn't coordinate writes.",
+                        "Wrong. Writes still go to one place.",
+                        "Wrong. That only saves space.",
+                    },
+                    Explanation = "Transactions make concurrent changes safe.",
+                });
+        }
 
         static IReadOnlyList<KeyedQuestion> BuildQuestions()
         {

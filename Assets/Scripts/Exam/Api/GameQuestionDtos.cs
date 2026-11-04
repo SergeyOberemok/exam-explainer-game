@@ -96,6 +96,31 @@ namespace ExamCards.Exam.Api
         public int fifty_fifty_remaining;
     }
 
+    /// <summary>Body of <c>POST /game/rounds/{round_id}/questions</c>.</summary>
+    [Serializable]
+    public sealed class GameRoundQuestionRequestDto
+    {
+        public string question_id;
+    }
+
+    /// <summary>Response of <c>POST /game/rounds/{round_id}/questions</c>: the added question, without its key.</summary>
+    [Serializable]
+    public sealed class GameRoundQuestionDto
+    {
+        public GameQuestionDto item;
+
+        /// <summary>Its simplified version: one item, or none.</summary>
+        public GameQuestionDto[] simplified;
+    }
+
+    /// <summary>Response of <c>GET /search/game-questions</c>: playable matches, best first, without their key.</summary>
+    [Serializable]
+    public sealed class GameQuestionListDto
+    {
+        public GameQuestionDto[] items;
+        public int total;
+    }
+
     /// <summary>FastAPI's error body when <c>detail</c> is a message (validation errors use a list instead).</summary>
     [Serializable]
     public sealed class ApiErrorDto

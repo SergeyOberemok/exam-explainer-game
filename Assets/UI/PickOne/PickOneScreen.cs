@@ -15,6 +15,8 @@ namespace ExamCards.UI
     /// and handles card picks (click or keys 1-4), Reveal (click or R), 50/50 (click or F), Next, Play Again
     /// and Retry (click, Enter or Space) and the final score. Answers and 50/50 are checked by the round,
     /// so they run asynchronously; a failed request leaves the question as it was and shows a message.
+    /// The search modal (header button or /) finds questions by text; choosing one adds it to the round and
+    /// plays it right away.
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PickOneScreen : MonoBehaviour
@@ -26,6 +28,15 @@ namespace ExamCards.UI
         const string NoQuestionsText = "No questions are available.";
         const string AnswerFailedText = "Could not check that answer. Pick again to retry.";
         const string FiftyFiftyFailedText = "50/50 is unavailable right now. Try again.";
+        const string SearchHintText = "Type at least 2 characters to search all questions.";
+        const string SearchingText = "Searching…";
+        const string SearchFailedText = "Search failed. Check the connection and try again.";
+        const string SearchUnavailableText = "Search is unavailable.";
+        const string AddingText = "Adding the question to this round…";
+        const string AddFailedText = "Could not add that question. Choose it again to retry.";
+        const string AlreadyAnsweredText = "You have already answered that question in this round.";
+        const string NoRoundText = "Wait for the round to load, then choose a question.";
+        const string ExamOverText = "No lives left, so no more questions can be added to this round.";
 
         [SerializeField] VisualTreeAsset _answerCardTemplate;
 
@@ -38,9 +49,15 @@ namespace ExamCards.UI
         IQuestionService _questionService;
         ExamSession _session;
 
-        // Cancels the round load and any answer or 50/50 request; replaced for every new round.
+        // Cancels the round load and any answer, 50/50 or play-now request; replaced for every new round.
         CancellationTokenSource _roundCancellation;
         bool _loadFailed;
+
+        // Cancels the running search; replaced for every search.
+        CancellationTokenSource _searchCancellation;
+        IReadOnlyList<Question> _searchResults = Array.Empty<Question>();
+        SearchPanelView _search;
+        VisualElement _searchButton;
 
         Label _categoryLabel;
         VisualElement _simplifiedBadge;
@@ -97,9 +114,15 @@ namespace ExamCards.UI
             _playAgainButton = root.Q<Button>("playAgainButton");
 
             _exitButton = root.Q("exitButton");
+            _searchButton = root.Q("searchButton");
             _hearts = root.Q("hearts").Children().ToList();
+            _search = new SearchPanelView(root);
 
             _exitButton.RegisterCallback<ClickEvent>(OnExitClicked);
+            _searchButton.RegisterCallback<ClickEvent>(OnSearchClicked);
+            _search.TextChanged += OnSearchTextChanged;
+            _search.Chosen += OnSearchResultChosen;
+            _search.CloseRequested += CloseSearch;
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
@@ -114,8 +137,18 @@ namespace ExamCards.UI
         void OnDisable()
         {
             CancelRound();
+            CancelSearch();
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
+            _searchButton?.UnregisterCallback<ClickEvent>(OnSearchClicked);
+            if (_search != null)
+            {
+                _search.TextChanged -= OnSearchTextChanged;
+                _search.Chosen -= OnSearchResultChosen;
+                _search.CloseRequested -= CloseSearch;
+                _search.Dispose();
+                _search = null;
+            }
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             if (_revealButton != null)
                 _revealButton.clicked -= OnRevealPressed;
@@ -133,6 +166,19 @@ namespace ExamCards.UI
             var keyboard = Keyboard.current;
             if (keyboard == null)
                 return;
+
+            // While the modal is open, keys belong to it and to its text field, not to the question.
+            if (_search.IsOpen)
+            {
+                HandleSearchKeys(keyboard);
+                return;
+            }
+
+            if (keyboard[Key.Slash].wasPressedThisFrame && CanOpenSearch)
+            {
+                OpenSearch();
+                return;
+            }
 
             if (_session == null)
             {
@@ -198,6 +244,9 @@ namespace ExamCards.UI
         {
             _session = null;
             _loadFailed = false;
+            CloseSearch();
+            _searchResults = Array.Empty<Question>();
+            _search.Reset(SearchHintText);
             _resultsOverlay.AddToClassList(ResultsHiddenClass);
             _retryButton.AddToClassList(HiddenClass);
             _nextButton.AddToClassList(HiddenClass);
@@ -417,13 +466,175 @@ namespace ExamCards.UI
 
         void OnNextPressed()
         {
-            if (_session == null || _session.IsFinished || !_session.IsCurrentAnswered)
+            if (_session == null || _session.IsFinished || !_session.IsCurrentAnswered || _session.IsBusy)
                 return;
 
             if (_session.MoveNext())
                 ShowCurrentQuestion();
             else
                 ShowResults();
+        }
+
+        // ---------- search ----------
+
+        /// <summary>Not over the results screen: a finished exam can't take new questions.</summary>
+        bool CanOpenSearch => _session == null || !_session.IsFinished;
+
+        void OnSearchClicked(ClickEvent evt)
+        {
+            if (CanOpenSearch)
+                OpenSearch();
+        }
+
+        void OpenSearch()
+        {
+            // The exam may have moved on since the last search, so refresh the rows' state chips.
+            _search.ShowResults(_searchResults, GetSearchResultState);
+            _search.Open();
+        }
+
+        void CloseSearch()
+        {
+            CancelSearch();
+            _search.Close();
+        }
+
+        void CancelSearch()
+        {
+            _searchCancellation?.Cancel();
+            _searchCancellation?.Dispose();
+            _searchCancellation = null;
+        }
+
+        void HandleSearchKeys(Keyboard keyboard)
+        {
+            if (keyboard[Key.Escape].wasPressedThisFrame)
+                CloseSearch();
+            else if (keyboard[Key.UpArrow].wasPressedThisFrame)
+                _search.MoveSelection(-1);
+            else if (keyboard[Key.DownArrow].wasPressedThisFrame)
+                _search.MoveSelection(1);
+            else if (keyboard[Key.Enter].wasPressedThisFrame || keyboard[Key.NumpadEnter].wasPressedThisFrame)
+                _search.ChooseSelected();
+        }
+
+        void OnSearchTextChanged(string text)
+        {
+            CancelSearch();
+            if (text == null)
+            {
+                ShowSearchResults(Array.Empty<Question>());
+                _search.ShowMessage(SearchHintText);
+                return;
+            }
+            RunSearch(text);
+        }
+
+        async void RunSearch(string text)
+        {
+            if (_questionService is not IQuestionSearch search)
+            {
+                _search.ShowMessage(SearchUnavailableText);
+                return;
+            }
+
+            _searchCancellation = new CancellationTokenSource();
+            var token = _searchCancellation.Token;
+            _search.ShowMessage(SearchingText);
+
+            IReadOnlyList<Question> results;
+            try
+            {
+                results = await search.SearchAsync(text, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                if (token.IsCancellationRequested)
+                    return;
+                Debug.LogException(e, this);
+                _search.ShowMessage(SearchFailedText);
+                return;
+            }
+
+            if (token.IsCancellationRequested)
+                return;
+            ShowSearchResults(results);
+            _search.ShowMessage(results.Count == 0
+                ? $"No playable questions match \u201c{text}\u201d."
+                : $"{results.Count} {(results.Count == 1 ? "question" : "questions")} found. Choose one to play it now.");
+        }
+
+        void ShowSearchResults(IReadOnlyList<Question> results)
+        {
+            _searchResults = results;
+            _search.ShowResults(results, GetSearchResultState);
+        }
+
+        SearchResultState GetSearchResultState(Question question)
+        {
+            var index = _session?.IndexOf(question.Id) ?? -1;
+            if (index < 0)
+                return SearchResultState.New;
+            if (index < _session.CurrentIndex || (index == _session.CurrentIndex && _session.IsCurrentAnswered))
+                return SearchResultState.Answered;
+            return index == _session.CurrentIndex ? SearchResultState.Current : SearchResultState.InRound;
+        }
+
+        /// <summary>
+        /// Plays the chosen question now: the session adds it to the round if needed and makes it current. A
+        /// failure keeps the exam as it was and the modal open, so the player can choose again.
+        /// </summary>
+        async void OnSearchResultChosen(Question question)
+        {
+            var session = _session;
+            if (session == null)
+            {
+                _search.ShowMessage(NoRoundText);
+                return;
+            }
+            if (session.IsBusy)
+                return;
+            if (!session.CanPlayNow)
+            {
+                _search.ShowMessage(ExamOverText);
+                return;
+            }
+
+            var token = _roundCancellation.Token;
+            _search.ShowMessage(AddingText);
+
+            PlayNowOutcome outcome;
+            try
+            {
+                outcome = await session.PlayNowAsync(question.Id, token);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
+            catch (Exception e)
+            {
+                if (token.IsCancellationRequested || session != _session)
+                    return;
+                Debug.LogException(e, this);
+                _search.ShowMessage(AddFailedText);
+                return;
+            }
+
+            if (session != _session)
+                return;
+            if (outcome == PlayNowOutcome.AlreadyAnswered)
+            {
+                _search.ShowMessage(AlreadyAnsweredText);
+                return;
+            }
+
+            CloseSearch();
+            ShowCurrentQuestion();
         }
 
         void ShowResults()

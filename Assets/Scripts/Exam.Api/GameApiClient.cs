@@ -5,7 +5,7 @@ using UnityEngine;
 
 namespace ExamCards.Exam.Api
 {
-    /// <summary>Posts JSON to the backend and parses the JSON reply, turning failures into readable exceptions.</summary>
+    /// <summary>Sends requests to the backend and parses the JSON reply, turning failures into readable exceptions.</summary>
     sealed class GameApiClient
     {
         const int MaxDetailLength = 300;
@@ -23,12 +23,23 @@ namespace ExamCards.Exam.Api
 
         /// <exception cref="ApiException">No response, or a non-2xx status.</exception>
         /// <exception cref="FormatException">The reply is not the expected JSON.</exception>
-        public async Task<TResponse> PostAsync<TResponse>(string path, object body, CancellationToken cancellationToken)
+        public Task<TResponse> PostAsync<TResponse>(string path, object body, CancellationToken cancellationToken)
+            where TResponse : class =>
+            SendAsync<TResponse>("POST", path, JsonUtility.ToJson(body), cancellationToken);
+
+        /// <param name="pathAndQuery">The path with its query string, already escaped.</param>
+        /// <exception cref="ApiException">No response, or a non-2xx status.</exception>
+        /// <exception cref="FormatException">The reply is not the expected JSON.</exception>
+        public Task<TResponse> GetAsync<TResponse>(string pathAndQuery, CancellationToken cancellationToken)
+            where TResponse : class =>
+            SendAsync<TResponse>("GET", pathAndQuery, null, cancellationToken);
+
+        async Task<TResponse> SendAsync<TResponse>(string method, string path, string jsonBody,
+            CancellationToken cancellationToken)
             where TResponse : class
         {
-            const string method = "POST";
             var url = _baseUrl + path;
-            var response = await _transport.SendAsync(method, url, JsonUtility.ToJson(body), _timeoutSeconds, cancellationToken);
+            var response = await _transport.SendAsync(method, url, jsonBody, _timeoutSeconds, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             if (!response.IsSuccess)

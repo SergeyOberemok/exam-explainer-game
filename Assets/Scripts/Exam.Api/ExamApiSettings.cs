@@ -12,6 +12,8 @@ namespace ExamCards.Exam.Api
     {
         public const string ResourceName = "ExamApiSettings";
         public const int MaxQuestionCount = 50;
+        public const int DefaultSearchLimit = 8;
+        public const int MaxSearchLimit = 50;
 
         [Tooltip("Base URL of the backend, without a trailing slash. Plain http:// works only in the Editor and development builds.")]
         [SerializeField] string _baseUrl = "http://127.0.0.1:8000";
@@ -20,6 +22,10 @@ namespace ExamCards.Exam.Api
         [Range(1, MaxQuestionCount)]
         [SerializeField] int _questionCount = 10;
 
+        [Tooltip("Most results one search returns.")]
+        [Range(1, MaxSearchLimit)]
+        [SerializeField] int _searchLimit = DefaultSearchLimit;
+
         [Tooltip("Seconds before a single request gives up.")]
         [Min(1)]
         [SerializeField] int _timeoutSeconds = 15;
@@ -27,6 +33,7 @@ namespace ExamCards.Exam.Api
         public string BaseUrl => _baseUrl;
         public int QuestionCount => _questionCount;
         public int TimeoutSeconds => _timeoutSeconds;
+        public int SearchLimit => _searchLimit;
 
         public static ExamApiSettings Load()
         {

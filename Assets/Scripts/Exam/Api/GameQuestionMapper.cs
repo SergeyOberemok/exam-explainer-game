@@ -47,17 +47,65 @@ namespace ExamCards.Exam.Api
             return originals.Select(original =>
             {
                 simplifiedById.TryGetValue(original.id, out var simplified);
-                var question = new Question
-                {
-                    Id = original.id,
-                    Section = original.section,
-                    Source = Source,
-                    Original = ToPrompt(original),
-                    Simplified = simplified == null ? null : ToPrompt(simplified),
-                };
-                QuestionValidator.ValidateQuestion(question);
-                return question;
+                return ToQuestion(original, simplified);
             }).ToList();
+        }
+
+        /// <returns>The search results in their order; they never have simplified text.</returns>
+        /// <exception cref="FormatException">A result is inconsistent, or listed twice.</exception>
+        public static IReadOnlyList<Question> ToSearchResults(GameQuestionListDto list)
+        {
+            if (list == null)
+                throw new FormatException("The search response is empty.");
+
+            var ids = new HashSet<string>();
+            return (list.items ?? Array.Empty<GameQuestionDto>()).Select(item =>
+            {
+                CheckOriginal(item);
+                if (!ids.Add(item.id))
+                    throw new FormatException($"Question {item.id}: found more than once.");
+                return ToQuestion(item, null);
+            }).ToList();
+        }
+
+        /// <exception cref="FormatException">The response is for another question, or inconsistent.</exception>
+        public static Question ToAddedQuestion(GameRoundQuestionDto result, string questionId)
+        {
+            if (result?.item == null)
+                throw new FormatException($"Question {questionId}: the add-question response is empty.");
+            CheckOriginal(result.item);
+            if (result.item.id != questionId)
+                throw new FormatException($"Question {questionId}: the add-question response is for question {result.item.id}.");
+
+            var simplified = result.simplified ?? Array.Empty<GameQuestionDto>();
+            if (simplified.Length > 1)
+                throw new FormatException($"Question {questionId}: more than one simplified version.");
+            var version = simplified.Length == 1 ? simplified[0] : null;
+            if (version != null && (version.id != questionId || !version.simplified))
+                throw new FormatException($"Question {questionId}: the simplified version doesn't match the question.");
+            return ToQuestion(result.item, version);
+        }
+
+        static void CheckOriginal(GameQuestionDto dto)
+        {
+            if (dto == null || string.IsNullOrEmpty(dto.id))
+                throw new FormatException("A question has no id.");
+            if (dto.simplified)
+                throw new FormatException($"Question {dto.id}: listed as an original but marked simplified.");
+        }
+
+        static Question ToQuestion(GameQuestionDto original, GameQuestionDto simplified)
+        {
+            var question = new Question
+            {
+                Id = original.id,
+                Section = original.section,
+                Source = Source,
+                Original = ToPrompt(original),
+                Simplified = simplified == null ? null : ToPrompt(simplified),
+            };
+            QuestionValidator.ValidateQuestion(question);
+            return question;
         }
 
         /// <exception cref="FormatException">The response is for another answer, or contradicts itself.</exception>
