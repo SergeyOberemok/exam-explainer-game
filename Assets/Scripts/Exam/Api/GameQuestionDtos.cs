@@ -39,6 +39,33 @@ namespace ExamCards.Exam.Api
         public string assessment_type;
         public string question;
         public GameAnswerDto[] answers;
+
+        /// <summary>Visual entities; empty lists for originals (and null when the field is missing).</summary>
+        public GameEntitiesDto entities;
+    }
+
+    /// <summary>The visual entities of a <see cref="GameQuestionDto"/>; <c>answers</c> is index-aligned with its answers.</summary>
+    [Serializable]
+    public sealed class GameEntitiesDto
+    {
+        public GameEntityDto[] question;
+        public GameAnswerEntitiesDto[] answers;
+    }
+
+    /// <summary>The entities of one answer (an object, because JsonUtility can't read lists of lists).</summary>
+    [Serializable]
+    public sealed class GameAnswerEntitiesDto
+    {
+        public GameEntityDto[] entities;
+    }
+
+    /// <summary>One visual entity; <c>kind</c> is "actor", "object" or "action".</summary>
+    [Serializable]
+    public sealed class GameEntityDto
+    {
+        public string name;
+        public string kind;
+        public string[] aliases;
     }
 
     /// <summary>One answer option of a <see cref="GameQuestionDto"/>.</summary>

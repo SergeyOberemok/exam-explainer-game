@@ -12,5 +12,8 @@ namespace ExamCards.Exam
     {
         public string Question { get; set; }
         public IReadOnlyList<string> Answers { get; set; } = Array.Empty<string>();
+
+        /// <summary>What the text mentions, as icons can show it. Only simplified versions have any.</summary>
+        public PromptEntities Entities { get; set; } = PromptEntities.Empty;
     }
 }

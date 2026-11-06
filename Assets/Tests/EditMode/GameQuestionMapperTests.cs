@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using ExamCards.Exam.Api;
 using NUnit.Framework;
 using UnityEngine;
@@ -230,6 +231,72 @@ namespace ExamCards.Exam.Tests
                 "{\"question_id\":\"q1\",\"answer_index\":0,\"is_correct\":false,\"correct_index\":1}");
 
             Assert.Throws<FormatException>(() => GameQuestionMapper.ToReview(result, "q1", 0));
+        }
+
+        // A round whose only simplified version carries ENTITIES (two answers).
+        const string EntitiesRoundJson = @"{
+            ""round_id"": ""r1"",
+            ""items"": [{
+                ""id"": ""q1"", ""simplified"": false, ""section"": ""S"", ""assessment_type"": ""t"",
+                ""question"": ""Original"",
+                ""answers"": [ { ""index"": 0, ""text"": ""x"" }, { ""index"": 1, ""text"": ""y"" } ],
+                ""entities"": { ""question"": [], ""answers"": [] }
+            }],
+            ""simplified"": [{
+                ""id"": ""q1"", ""simplified"": true, ""section"": ""S"", ""assessment_type"": ""t"",
+                ""question"": ""Simple"",
+                ""answers"": [ { ""index"": 0, ""text"": ""a"" }, { ""index"": 1, ""text"": ""b"" } ]
+                ENTITIES
+            }],
+            ""total"": 1,
+            ""fifty_fifty_charges"": 2
+        }";
+
+        static Question ParseEntities(string entitiesJson) =>
+            GameQuestionMapper.BuildQuestions(JsonUtility.FromJson<GameRoundDto>(
+                EntitiesRoundJson.Replace("ENTITIES", entitiesJson == null ? "" : "," + entitiesJson)))[0];
+
+        [Test]
+        public void Entities_MapToTheSimplifiedPrompt()
+        {
+            var question = ParseEntities(@"""entities"": {
+                ""question"": [ { ""name"": "" Subagent "", ""kind"": ""actor"", ""aliases"": [""helper"", "" ""] } ],
+                ""answers"": [
+                    { ""entities"": [ { ""name"": ""process_refund"", ""kind"": ""action"", ""aliases"": [] } ] },
+                    { ""entities"": [] }
+                ] }");
+
+            var entities = question.Simplified.Entities;
+            Assert.AreEqual("Subagent", entities.Question.Single().Name);
+            Assert.AreEqual(EntityKind.Actor, entities.Question[0].Kind);
+            CollectionAssert.AreEqual(new[] { "helper" }, entities.Question[0].Aliases);
+            Assert.AreEqual(EntityKind.Action, entities.ForAnswer(0).Single().Kind);
+            Assert.AreEqual(0, entities.ForAnswer(1).Count);
+            Assert.AreEqual(0, entities.ForAnswer(7).Count);
+            Assert.IsTrue(question.Original.Entities.IsEmpty);
+        }
+
+        [Test]
+        public void Entities_Missing_AreEmpty()
+        {
+            Assert.IsTrue(ParseEntities(null).Simplified.Entities.IsEmpty);
+            Assert.IsTrue(ParseEntities(@"""entities"": {}").Simplified.Entities.IsEmpty);
+        }
+
+        [Test]
+        public void Entities_BadOnes_AreDropped_NotFatal()
+        {
+            var question = ParseEntities(@"""entities"": {
+                ""question"": [
+                    { ""name"": ""Planet"", ""kind"": ""planet"" },
+                    { ""name"": "" "", ""kind"": ""object"" },
+                    { ""name"": ""Server"", ""kind"": ""object"" } ],
+                ""answers"": [ { ""entities"": [ { ""name"": ""A"", ""kind"": ""object"" } ] } ] }");
+
+            var entities = question.Simplified.Entities;
+            Assert.AreEqual("Server", entities.Question.Single().Name);
+            Assert.AreEqual(0, entities.Answers.Count, "one list for two answers doesn't line up");
+            Assert.AreEqual(0, entities.Question[0].Aliases.Count);
         }
     }
 }

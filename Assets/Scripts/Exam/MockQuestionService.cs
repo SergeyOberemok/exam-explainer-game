@@ -51,7 +51,15 @@ namespace ExamCards.Exam
             public string[] Answers;
             public string[] Feedbacks;
             public string Explanation;
+            public PromptEntities Entities;
         }
+
+        static VisualEntity Actor(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Actor, Aliases = aliases };
+        static VisualEntity Thing(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Object, Aliases = aliases };
+        static VisualEntity Step(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Action, Aliases = aliases };
+
+        static PromptEntities Entities(VisualEntity[] question, params VisualEntity[][] answers) =>
+            new PromptEntities { Question = question, Answers = answers };
 
         static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified) =>
             new KeyedQuestion
@@ -62,7 +70,7 @@ namespace ExamCards.Exam
                     Section = section,
                     Source = "mock",
                     Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers },
-                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers },
+                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers, Entities = simplified.Entities ?? PromptEntities.Empty },
                 },
                 Review = new AnswerReview
                 {
@@ -103,6 +111,8 @@ namespace ExamCards.Exam
                         "Right. The server's CORS headers tell the browser what's allowed.",
                     },
                     Explanation = "CORS headers from the server tell the browser which other sites may call it.",
+                    Entities = Entities(new[] { Thing("Web Page", "page"), Thing("Browser"), Thing("API"), Step("Call API") },
+                        new[] { Thing("DNS") }, new[] { Thing("Certificate") }, new[] { Thing("Connection") }, new[] { Thing("CORS", "CORS headers") }),
                 });
             yield return Make("q5", "Sample: Databases", 0,
                 new Version
@@ -130,6 +140,8 @@ namespace ExamCards.Exam
                         "Wrong. That only saves space.",
                     },
                     Explanation = "Transactions make concurrent changes safe.",
+                    Entities = Entities(new[] { Step("Transfer", "transfers"), Thing("Account"), Thing("Balance") },
+                        new[] { Thing("Transaction", "transactions") }, new[] { Thing("Memory") }, new[] { Thing("Read Replica", "read replicas") }, new[] { Thing("Compression") }),
                 });
         }
 
@@ -163,6 +175,8 @@ namespace ExamCards.Exam
                             "Wrong. The resource still exists.",
                         },
                         Explanation = "An expired login is an authentication failure, and 401 is the code for that.",
+                        Entities = Entities(new[] { Actor("User", "user's"), Thing("Session", "login session"), Thing("API"), Step("Return Status Code") },
+                            new[] { Thing("Request") }, new[] { Step("Log In") }, new[] { Thing("Permission") }, new[] { Thing("Page") }),
                     }),
                 Make("q2", "Sample: Databases", 2,
                     new Version
@@ -190,6 +204,8 @@ namespace ExamCards.Exam
                             "Wrong. This only adds work.",
                         },
                         Explanation = "An index lets the database skip scanning the whole table.",
+                        Entities = Entities(new[] { Thing("Query"), Thing("Order", "orders"), Actor("Customer") },
+                            new[] { Thing("Database Connection", "database connections") }, new[] { Thing("Column", "columns") }, new[] { Thing("Index") }, new[] { Step("Run Query") }),
                     }),
                 Make("q3", "Sample: Version Control", 0,
                     new Version
@@ -217,6 +233,8 @@ namespace ExamCards.Exam
                             "Wrong. The fix never reaches the branch.",
                         },
                         Explanation = "git revert undoes a commit by adding a new one, so nobody's history breaks.",
+                        Entities = Entities(new[] { Thing("Commit", "bad commit"), Thing("Branch", "shared branch"), Step("Undo Commit") },
+                            new[] { Thing("git revert"), Step("Push") }, new[] { Thing("git reset --hard"), Step("Force-Push") }, new[] { Thing("Branch") }, new[] { Thing("File", "files") }),
                     }),
             };
         }

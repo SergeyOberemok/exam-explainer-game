@@ -217,6 +217,18 @@ namespace ExamCards.Exam
             return true;
         }
 
+        /// <summary>Switches the current question back to its original text. Returns false if nothing changed.</summary>
+        public bool ShowOriginal()
+        {
+            if (IsFinished || !IsCurrentRevealed)
+                return false;
+            IsCurrentRevealed = false;
+            return true;
+        }
+
+        /// <summary>Toggles between the original and simplified text. Returns false if nothing changed.</summary>
+        public bool ToggleSimplified() => IsCurrentRevealed ? ShowOriginal() : Reveal();
+
         /// <summary>Advances to the next question. Returns false when the exam is over.</summary>
         /// <exception cref="InvalidOperationException">Unanswered, busy, or <see cref="NeedsMore"/> (load first).</exception>
         public bool MoveNext()

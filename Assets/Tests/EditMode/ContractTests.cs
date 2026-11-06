@@ -40,6 +40,26 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Entities_ComeWithTheSimplifiedText()
+        {
+            var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
+            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+
+            foreach (var question in new[] { round[0], added })
+            {
+                var entities = question.Simplified.Entities;
+                CollectionAssert.AreEqual(new[] { "API Key", "Send Request" }, entities.Question.Select(e => e.Name));
+                CollectionAssert.AreEqual(new[] { EntityKind.Object, EntityKind.Action }, entities.Question.Select(e => e.Kind));
+                CollectionAssert.AreEqual(new[] { "key" }, entities.Question[0].Aliases);
+                Assert.AreEqual(3, entities.Answers.Count);
+                Assert.AreEqual("x-api-key", entities.ForAnswer(1).Single().Name);
+                Assert.AreEqual(0, entities.ForAnswer(2).Count);
+                Assert.IsTrue(question.Original.Entities.IsEmpty);
+            }
+            Assert.IsTrue(round[1].Original.Entities.IsEmpty);
+        }
+
+        [Test]
         public void Answers_MapToReviews()
         {
             var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));

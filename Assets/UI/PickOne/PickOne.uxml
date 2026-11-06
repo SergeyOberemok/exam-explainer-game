@@ -72,6 +72,7 @@
                         </ui:VisualElement>
                         <ui:Label name="statusText" enable-rich-text="false" class="status-text is-hidden" />
                     </ui:VisualElement>
+                    <ui:VisualElement name="questionEntities" class="entity-strip is-hidden" />
                     <ui:ScrollView name="questionScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="question__scroll">
                         <ui:Label name="questionText" text="Loading question…" enable-rich-text="false" class="question__text" />
                         <ui:VisualElement name="explanationSection" class="explanation is-hidden">
@@ -123,7 +124,7 @@
                                 <ui:Label text="1" class="chip__text" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        <ui:Button name="revealButton" text="Reveal Simplified [R]" focusable="false" class="action-button" />
+                        com
                         <ui:Button name="nextButton" text="Next Question" focusable="false" class="action-button action-button--primary is-hidden" />
                         <ui:Button name="retryButton" text="Retry [Enter]" focusable="false" class="action-button action-button--primary is-hidden" />
                     </ui:VisualElement>

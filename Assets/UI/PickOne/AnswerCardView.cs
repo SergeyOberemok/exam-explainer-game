@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using ExamCards.Exam;
 using UnityEngine;
 using UnityEngine.UIElements;
 
@@ -23,6 +25,9 @@ namespace ExamCards.UI
         const string EliminatedClass = "answer-card--eliminated";
         const string HiddenClass = "is-hidden";
 
+        /// <summary>The backend sends at most this many per answer.</summary>
+        const int MaxEntities = 4;
+
         readonly VisualElement _card;
         readonly Label _keyLabel;
         readonly Label _letterBadge;
@@ -30,6 +35,7 @@ namespace ExamCards.UI
         readonly Label _feedbackText;
         readonly ScrollView _scroll;
         readonly Label _selectLabel;
+        readonly EntityStripView _entities;
 
         public AnswerCardView(VisualElement root, int index)
         {
@@ -43,6 +49,7 @@ namespace ExamCards.UI
             _feedbackText = root.Q<Label>("feedbackText");
             _scroll = root.Q<ScrollView>("cardScroll");
             _selectLabel = root.Q<Label>("selectLabel");
+            _entities = new EntityStripView(root.Q("cardEntities"), compact: true, maxShown: MaxEntities);
 
             root.Q<Button>("selectButton").clicked += () => Selected?.Invoke(Index);
 
@@ -62,6 +69,9 @@ namespace ExamCards.UI
             _feedbackText.text = feedbackText;
             _scroll.scrollOffset = Vector2.zero;
         }
+
+        /// <summary>Shows the answer's entity icons; null or empty hides them. Doesn't touch the card's state.</summary>
+        public void BindEntities(IReadOnlyList<VisualEntity> entities) => _entities.Bind(entities);
 
         public void SetState(AnswerCardState state)
         {

@@ -24,6 +24,8 @@ namespace ExamCards.UI
     public sealed class PickOneScreen : MonoBehaviour
     {
         const string HiddenClass = "is-hidden";
+        /// <summary>Icons shown for the question; the rest would crowd out the text.</summary>
+        const int MaxQuestionEntities = 8;
         const string ResultsHiddenClass = "results--hidden";
         const string LoadingText = "Loading question…";
         const string LoadFailedText = "Could not load questions.";
@@ -65,6 +67,7 @@ namespace ExamCards.UI
 
         Label _categoryLabel;
         VisualElement _simplifiedBadge;
+        EntityStripView _questionEntities;
         ScrollView _questionScroll;
         Label _questionText;
         VisualElement _explanationSection;
@@ -99,6 +102,7 @@ namespace ExamCards.UI
             var root = GetComponent<UIDocument>().rootVisualElement;
             _categoryLabel = root.Q<Label>("categoryLabel");
             _simplifiedBadge = root.Q("simplifiedBadge");
+            _questionEntities = new EntityStripView(root.Q("questionEntities"), compact: false, maxShown: MaxQuestionEntities);
             _questionScroll = root.Q<ScrollView>("questionScroll");
             _questionText = root.Q<Label>("questionText");
             _explanationSection = root.Q("explanationSection");
@@ -357,9 +361,14 @@ namespace ExamCards.UI
             _explanationSection.EnableInClassList(HiddenClass, !answered);
             _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
 
+            // Entities illustrate the simplified text, so they only show with it.
+            var entities = _session.IsCurrentRevealed ? prompt.Entities : null;
+            _questionEntities.Bind(entities?.Question);
+
             for (var i = 0; i < _cards.Count; i++)
             {
                 _cards[i].Bind(prompt.Answers[i], review?.Feedbacks[i]);
+                _cards[i].BindEntities(entities?.ForAnswer(i));
                 _cards[i].SetState(GetCardState(i));
             }
 
@@ -368,8 +377,8 @@ namespace ExamCards.UI
 
             _fiftyFiftyCount.text = _session.FiftyFiftyRemaining.ToString();
             _fiftyFiftyButton.SetEnabled(_session.CanEliminate);
-            _revealButton.SetEnabled(question.CanReveal && !_session.IsCurrentRevealed);
-            _revealButton.text = _session.IsCurrentRevealed ? "Simplified Shown" : "Reveal Simplified [R]";
+            _revealButton.SetEnabled(question.CanReveal);
+            _revealButton.text = _session.IsCurrentRevealed ? "Show Original [R]" : "Show Simplified [R]";
 
             _nextButton.text = _session.IsLastQuestion ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
@@ -482,7 +491,7 @@ namespace ExamCards.UI
         {
             if (_session == null)
                 return;
-            if (_session.Reveal())
+            if (_session.ToggleSimplified())
                 RenderPrompt();
         }
 

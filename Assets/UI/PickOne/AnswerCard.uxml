@@ -7,6 +7,7 @@
                 <ui:VisualElement class="card__letter">
                     <ui:Label name="letterBadge" text="A" class="card__letter-text" />
                 </ui:VisualElement>
+                <ui:VisualElement name="cardEntities" class="card__entities is-hidden" />
                 <ui:VisualElement class="chip chip--peach-2 chip--raised card__key">
                     <ui:Label name="keyLabel" text="Key [1]" class="chip__text" />
                 </ui:VisualElement>

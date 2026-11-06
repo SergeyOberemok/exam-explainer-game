@@ -176,7 +176,60 @@ namespace ExamCards.Exam.Api
             {
                 Question = dto.question,
                 Answers = answers.Select(answer => answer.text ?? string.Empty).ToArray(),
+                Entities = ToEntities(dto.entities, answers.Length),
             };
+        }
+
+        /// <summary>
+        /// Entities only decorate a question, so bad ones are dropped instead of failing the round: an entity
+        /// without a name or with an unknown kind, and the answers' entities when they don't line up with the answers.
+        /// </summary>
+        static PromptEntities ToEntities(GameEntitiesDto dto, int answerCount)
+        {
+            if (dto == null)
+                return PromptEntities.Empty;
+
+            var question = ToEntityList(dto.question);
+            var answers = dto.answers != null && dto.answers.Length == answerCount
+                ? dto.answers.Select(answer => ToEntityList(answer?.entities)).ToArray()
+                : Array.Empty<IReadOnlyList<VisualEntity>>();
+            if (question.Count == 0 && answers.All(list => list.Count == 0))
+                return PromptEntities.Empty;
+            return new PromptEntities { Question = question, Answers = answers };
+        }
+
+        static IReadOnlyList<VisualEntity> ToEntityList(GameEntityDto[] dtos)
+        {
+            if (dtos == null || dtos.Length == 0)
+                return Array.Empty<VisualEntity>();
+
+            var entities = new List<VisualEntity>(dtos.Length);
+            foreach (var dto in dtos)
+            {
+                if (dto == null || string.IsNullOrWhiteSpace(dto.name) || !TryParseKind(dto.kind, out var kind))
+                    continue;
+                entities.Add(new VisualEntity
+                {
+                    Name = dto.name.Trim(),
+                    Kind = kind,
+                    Aliases = (dto.aliases ?? Array.Empty<string>())
+                        .Where(alias => !string.IsNullOrWhiteSpace(alias))
+                        .Select(alias => alias.Trim())
+                        .ToArray(),
+                });
+            }
+            return entities;
+        }
+
+        static bool TryParseKind(string value, out EntityKind kind)
+        {
+            switch (value)
+            {
+                case "actor": kind = EntityKind.Actor; return true;
+                case "object": kind = EntityKind.Object; return true;
+                case "action": kind = EntityKind.Action; return true;
+                default: kind = default; return false;
+            }
         }
 
         static PromptReview ToPromptReview(GameReviewDto dto) => new PromptReview
