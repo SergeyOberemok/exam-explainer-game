@@ -42,6 +42,24 @@ namespace ExamCards.Exam.Api
 
         /// <summary>Visual entities; empty lists for originals (and null when the field is missing).</summary>
         public GameEntitiesDto entities;
+
+        /// <summary>Learning-objective keys, the main one first; empty (or null when missing) for an untagged question.</summary>
+        public string[] objectives;
+
+        /// <summary>1 (easy) to 3 (hard); 0 for an untagged question.</summary>
+        public int difficulty;
+
+        /// <summary>Story chapter key; empty (or null when missing) for a question without a chapter.</summary>
+        public string scenario;
+
+        /// <summary>Key of the chapter's stage; empty until the question has a story record.</summary>
+        public string stage;
+
+        /// <summary><c>question</c> without its scenario paragraph; empty without a chapter and on simplified versions.</summary>
+        public string stem;
+
+        /// <summary>One story line to show before the question; empty until the question has a story record.</summary>
+        public string beat;
     }
 
     /// <summary>The visual entities of a <see cref="GameQuestionDto"/>; <c>answers</c> is index-aligned with its answers.</summary>
@@ -127,6 +145,12 @@ namespace ExamCards.Exam.Api
 
         /// <summary>Empty when <see cref="has_simplified"/> is false.</summary>
         public GameReviewDto simplified;
+
+        /// <summary>What <see cref="answer_index"/> suggests the player got wrong; empty for the correct answer or an untagged question.</summary>
+        public string misconception;
+
+        /// <summary>What the answer leads to in the story; empty for a question without a story record.</summary>
+        public string outcome;
     }
 
     /// <summary>Feedback and explanation of one version of an answered question.</summary>

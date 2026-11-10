@@ -4,7 +4,7 @@
     "simplified": false,
     "section": "Tools and MCPs",
     "assessment_type": "multiple-choice",
-    "question": "Which header carries the API key?",
+    "question": "SCENARIO: You are building a customer support resolution agent.\n\nQUESTION: Which header carries the API key?",
     "answers": [
       {
         "index": 0,
@@ -23,7 +23,16 @@
       "question_icon": null,
       "question": [],
       "answers": []
-    }
+    },
+    "objectives": [
+      "tools-mcp-config",
+      "tools-errors"
+    ],
+    "difficulty": 2,
+    "scenario": "support",
+    "stage": "build",
+    "stem": "Which header carries the API key?",
+    "beat": "The first API call of the support agent is refused."
   },
   "simplified": [
     {
@@ -94,7 +103,16 @@
             "icon": "tags"
           }
         ]
-      }
+      },
+      "objectives": [
+        "tools-mcp-config",
+        "tools-errors"
+      ],
+      "difficulty": 2,
+      "scenario": "support",
+      "stage": "build",
+      "stem": "",
+      "beat": "The first API call of the support agent is refused."
     }
   ]
 }

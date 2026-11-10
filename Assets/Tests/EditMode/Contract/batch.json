@@ -25,7 +25,13 @@
         "question_icon": null,
         "question": [],
         "answers": []
-      }
+      },
+      "objectives": [],
+      "difficulty": 0,
+      "scenario": "",
+      "stage": "",
+      "stem": "",
+      "beat": ""
     }
   ],
   "simplified": [],

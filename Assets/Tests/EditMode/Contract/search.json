@@ -5,7 +5,7 @@
       "simplified": false,
       "section": "Tools and MCPs",
       "assessment_type": "multiple-choice",
-      "question": "Which header carries the API key?",
+      "question": "SCENARIO: You are building a customer support resolution agent.\n\nQUESTION: Which header carries the API key?",
       "answers": [
         {
           "index": 0,
@@ -24,7 +24,13 @@
         "question_icon": null,
         "question": [],
         "answers": []
-      }
+      },
+      "objectives": [],
+      "difficulty": 0,
+      "scenario": "",
+      "stage": "",
+      "stem": "",
+      "beat": ""
     },
     {
       "id": "65f0000000000000000000a2",
@@ -54,7 +60,13 @@
         "question_icon": null,
         "question": [],
         "answers": []
-      }
+      },
+      "objectives": [],
+      "difficulty": 0,
+      "scenario": "",
+      "stage": "",
+      "stem": "",
+      "beat": ""
     },
     {
       "id": "65f0000000000000000000a3",
@@ -80,7 +92,13 @@
         "question_icon": null,
         "question": [],
         "answers": []
-      }
+      },
+      "objectives": [],
+      "difficulty": 0,
+      "scenario": "",
+      "stage": "",
+      "stem": "",
+      "beat": ""
     }
   ],
   "total": 3

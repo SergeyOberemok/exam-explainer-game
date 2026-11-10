@@ -40,6 +40,53 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Objectives_ComeWithTaggedQuestions_AndAMisconceptionWithAWrongAnswer()
+        {
+            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
+            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+
+            foreach (var tagged in new[] { questions[0], added })
+            {
+                CollectionAssert.AreEqual(new[] { "tools-mcp-config", "tools-errors" }, tagged.Objectives);
+                Assert.AreEqual(2, tagged.Difficulty);
+            }
+            Assert.IsEmpty(questions[1].Objectives);
+            Assert.AreEqual(0, questions[1].Difficulty);
+
+            var wrong = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_wrong.json"), Q1, 2);
+            QuestionValidator.ValidateReview(questions[0], wrong);
+            Assert.AreEqual("Header names are free to choose.", wrong.Misconception);
+            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1).Misconception);
+            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0).Misconception);
+        }
+
+        [Test]
+        public void Story_ComesWithQuestionsOfAChapter_AndAnOutcomeWithTheirAnswers()
+        {
+            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
+            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+
+            foreach (var told in new[] { questions[0], added })
+            {
+                Assert.AreEqual("support", told.Scenario);
+                Assert.AreEqual("build", told.Stage);
+                Assert.AreEqual("The first API call of the support agent is refused.", told.Beat);
+                // The scenario paragraph stays in the original text; the stem is what the screen shows.
+                StringAssert.StartsWith("SCENARIO:", told.Original.Question);
+                Assert.AreEqual("Which header carries the API key?", told.OriginalText);
+            }
+            Assert.IsEmpty(questions[1].Scenario);
+            Assert.IsEmpty(questions[1].Beat);
+            Assert.AreEqual(questions[1].Original.Question, questions[1].OriginalText);
+
+            Assert.AreEqual("Every call still comes back unauthorized.",
+                GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_wrong.json"), Q1, 2).Outcome);
+            Assert.AreEqual("The agent reaches the API.",
+                GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1).Outcome);
+            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0).Outcome);
+        }
+
+        [Test]
         public void Entities_ComeWithTheSimplifiedText()
         {
             var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));

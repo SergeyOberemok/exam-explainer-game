@@ -86,6 +86,31 @@ namespace ExamCards.Exam
                 AnswerIcons = answers.Select(answer => EntityIconResolver.Resolve(answer[0])).ToArray(),
             };
 
+        /// <summary>Objective keys (main one first) and difficulty of the sample questions, like the backend's tags.</summary>
+        static readonly Dictionary<string, (string[] Objectives, int Difficulty)> Tags =
+            new Dictionary<string, (string[] Objectives, int Difficulty)>
+            {
+                ["q1"] = (new[] { "sample-http-status" }, 1),
+                ["q2"] = (new[] { "sample-query-performance" }, 1),
+                ["q3"] = (new[] { "sample-git-history" }, 2),
+                ["q4"] = (new[] { "sample-browser-security", "sample-http-status" }, 2),
+                ["q5"] = (new[] { "sample-transactions" }, 3),
+            };
+
+        /// <summary>Chapter, stage and story line of the sample questions, like the backend's story records.</summary>
+        static readonly Dictionary<string, (string Stage, string Beat)> Story =
+            new Dictionary<string, (string Stage, string Beat)>
+            {
+                ["q1"] = ("build", "The first endpoint of the sample service answers, and nobody agrees what it should say."),
+                ["q2"] = ("scale", "The sample service slows down as its tables grow."),
+                ["q3"] = ("team", "Two teammates changed the same history and want it sorted out."),
+                ["q4"] = ("incident", "The browser refuses a request that works everywhere else."),
+                ["q5"] = ("incident", "A transfer left money in neither account."),
+            };
+
+        /// <summary>The chapter every sample question of the round belongs to.</summary>
+        public const string SampleScenario = "sample-service";
+
         static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified) =>
             new KeyedQuestion
             {
@@ -94,12 +119,18 @@ namespace ExamCards.Exam
                     Id = id,
                     Section = section,
                     Source = "mock",
+                    Objectives = Tags[id].Objectives,
+                    Difficulty = Tags[id].Difficulty,
+                    Scenario = SampleScenario,
+                    Stage = Story[id].Stage,
+                    Beat = Story[id].Beat,
                     Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers },
                     Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers, Entities = simplified.Entities ?? PromptEntities.Empty },
                 },
                 Review = new AnswerReview
                 {
                     CorrectIndex = correctIndex,
+                    Outcome = "The sample service moves on.",
                     Original = new PromptReview { Explanation = original.Explanation, Feedbacks = original.Feedbacks },
                     Simplified = new PromptReview { Explanation = simplified.Explanation, Feedbacks = simplified.Feedbacks },
                 },

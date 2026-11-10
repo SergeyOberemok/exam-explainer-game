@@ -175,6 +175,90 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Objectives_Missing_AreEmpty_AndDifficultyIsZero()
+        {
+            var question = GameQuestionMapper.BuildQuestions(ParseRound())[0];
+
+            Assert.IsEmpty(question.Objectives);
+            Assert.AreEqual(0, question.Difficulty);
+        }
+
+        [Test]
+        public void Objectives_KeepKeysInOrder_AndDropWhatIsNotAKey()
+        {
+            var round = ParseRound();
+            round.items[0].objectives = new[] { "tools-errors", " context-facts ", "Not A Key", null, "tools-errors" };
+            round.items[0].difficulty = 3;
+            round.items[1].difficulty = 7;
+
+            var questions = GameQuestionMapper.BuildQuestions(round);
+
+            CollectionAssert.AreEqual(new[] { "tools-errors", "context-facts" }, questions[0].Objectives);
+            Assert.AreEqual(3, questions[0].Difficulty);
+            Assert.AreEqual(0, questions[1].Difficulty);
+        }
+
+        [Test]
+        public void Story_Missing_IsEmpty_AndTheOriginalTextIsShown()
+        {
+            var question = GameQuestionMapper.BuildQuestions(ParseRound())[0];
+
+            Assert.IsEmpty(question.Scenario);
+            Assert.IsEmpty(question.Stage);
+            Assert.IsEmpty(question.Stem);
+            Assert.IsEmpty(question.Beat);
+            Assert.AreEqual(question.Original.Question, question.OriginalText);
+        }
+
+        [Test]
+        public void Story_KeepsKeysAndTrimmedLines_AndDropsWhatIsNotAKey()
+        {
+            var round = ParseRound();
+            round.items[0].scenario = " support ";
+            round.items[0].stage = "incident";
+            round.items[0].stem = " Which fix? ";
+            round.items[0].beat = " Logs show a failure. ";
+            round.items[1].scenario = "Not A Key";
+            round.items[1].stage = "Also Not";
+
+            var questions = GameQuestionMapper.BuildQuestions(round);
+
+            Assert.AreEqual("support", questions[0].Scenario);
+            Assert.AreEqual("incident", questions[0].Stage);
+            Assert.AreEqual("Which fix?", questions[0].OriginalText);
+            Assert.AreEqual("Logs show a failure.", questions[0].Beat);
+            Assert.IsEmpty(questions[1].Scenario);
+            Assert.IsEmpty(questions[1].Stage);
+        }
+
+        [Test]
+        public void ToReview_KeepsTheOutcome_ForAnyAnswer_AndThroughARecordedAnswer()
+        {
+            var wrong = ParseAnswer();
+            wrong.outcome = " It breaks. ";
+            var review = GameQuestionMapper.ToReview(wrong, "q1", 0);
+
+            Assert.AreEqual("It breaks.", review.Outcome);
+            Assert.AreEqual("It breaks.", review.WithAnsweredIndex(2).Outcome);
+            Assert.IsEmpty(GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0).Outcome);
+        }
+
+        [Test]
+        public void ToReview_KeepsTheMisconception_OnlyForAWrongAnswer()
+        {
+            var wrong = ParseAnswer();
+            wrong.misconception = " Believes X. ";
+            Assert.AreEqual("Believes X.", GameQuestionMapper.ToReview(wrong, "q1", 0).Misconception);
+            Assert.IsEmpty(GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0).Misconception);
+
+            var right = ParseAnswer();
+            right.answer_index = 1;
+            right.is_correct = true;
+            right.misconception = "Should not be shown.";
+            Assert.IsEmpty(GameQuestionMapper.ToReview(right, "q1", 1).Misconception);
+        }
+
+        [Test]
         public void ToReview_WithoutSimplified_HasNoSimplifiedReview()
         {
             var result = ParseAnswer();

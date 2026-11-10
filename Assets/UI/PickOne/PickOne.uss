@@ -349,10 +349,37 @@
 }
 
 .question__text {
+    /* Verdana is wide and sturdy already, so regular weight reads better than bold for long text.
+       The asset is a Dynamic OS font (nothing shipped); the default font covers systems without Verdana. */
+    -unity-font-definition: url("project://database/Assets/Resources/Fonts/Verdana%20SDF.asset");
     font-size: 17px;
+    -unity-font-style: normal;
+    letter-spacing: 0.2px;
+    word-spacing: 1px;
+    color: var(--heading);
+    white-space: normal;
+}
+
+/* The story line before a question, and the one after its answer. */
+.story-beat {
+    margin-bottom: 8px;
+    font-size: 14px;
+    -unity-font-style: italic;
+    color: var(--brand);
+    white-space: normal;
+}
+
+.story-outcome {
+    margin-bottom: 8px;
+    font-size: 15px;
     -unity-font-style: bold;
     color: var(--heading);
     white-space: normal;
+}
+
+/* Chapter and stage of the question; a click shows or hides the scenario paragraph. */
+.chapter-chip {
+    background-color: var(--gold);
 }
 
 .explanation {

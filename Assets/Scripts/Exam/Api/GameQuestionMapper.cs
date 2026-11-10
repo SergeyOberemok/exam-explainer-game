@@ -119,10 +119,28 @@ namespace ExamCards.Exam.Api
                 Source = Source,
                 Original = ToPrompt(original),
                 Simplified = simplified == null ? null : ToPrompt(simplified),
+                Objectives = ToObjectives(original.objectives),
+                Difficulty = original.difficulty >= 1 && original.difficulty <= 3 ? original.difficulty : 0,
+                // Like objectives, the story only describes a question: a bad key is dropped, never fatal.
+                Scenario = EntityIconResolver.CleanKey(original.scenario) ?? string.Empty,
+                Stage = EntityIconResolver.CleanKey(original.stage) ?? string.Empty,
+                Stem = original.stem?.Trim() ?? string.Empty,
+                Beat = original.beat?.Trim() ?? string.Empty,
             };
             QuestionValidator.ValidateQuestion(question);
             return question;
         }
+
+        /// <summary>
+        /// Objectives only describe a question, so anything that isn't a key (see
+        /// <see cref="EntityIconResolver.CleanKey"/>) or repeats is dropped instead of failing the round.
+        /// </summary>
+        static IReadOnlyList<string> ToObjectives(string[] keys) =>
+            (keys ?? Array.Empty<string>())
+                .Select(EntityIconResolver.CleanKey)
+                .Where(key => key != null)
+                .Distinct()
+                .ToArray();
 
         /// <param name="answerIndex">The answer sent; null for a recorded answer, which may be any.</param>
         /// <exception cref="FormatException">The response is for another answer, incomplete, or contradicts itself.</exception>
@@ -146,6 +164,9 @@ namespace ExamCards.Exam.Api
                 CorrectIndex = result.correct_index,
                 Original = ToPromptReview(result.original),
                 Simplified = result.has_simplified ? ToPromptReview(result.simplified) : null,
+                // The backend sends it only for a wrong answer; never show one next to a correct answer.
+                Misconception = result.is_correct ? string.Empty : result.misconception?.Trim() ?? string.Empty,
+                Outcome = result.outcome?.Trim() ?? string.Empty,
             };
         }
 

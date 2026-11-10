@@ -66,11 +66,19 @@ namespace ExamCards.UI
         VisualElement _searchButton;
 
         Label _categoryLabel;
+        VisualElement _chapterChip;
+        Label _chapterLabel;
+        Label _storyBeat;
+        Label _storyOutcome;
+
+        /// <summary>The player asked to see the scenario paragraph of the current question again.</summary>
+        bool _showScenario;
         VisualElement _simplifiedBadge;
         VisualElement _questionIcon;
         EntityStripView _questionEntities;
         ScrollView _questionScroll;
         Label _questionText;
+        TypewriterLabel _questionTypewriter;
         VisualElement _explanationSection;
         Label _explanationText;
         Label _progressLabel;
@@ -102,11 +110,17 @@ namespace ExamCards.UI
         {
             var root = GetComponent<UIDocument>().rootVisualElement;
             _categoryLabel = root.Q<Label>("categoryLabel");
+            _chapterChip = root.Q("chapterChip");
+            _chapterLabel = root.Q<Label>("chapterLabel");
+            _storyBeat = root.Q<Label>("storyBeat");
+            _storyOutcome = root.Q<Label>("storyOutcome");
+            _chapterChip.RegisterCallback<ClickEvent>(OnChapterClicked);
             _simplifiedBadge = root.Q("simplifiedBadge");
             _questionIcon = root.Q("questionIcon");
             _questionEntities = new EntityStripView(root.Q("questionEntities"), compact: false, maxShown: MaxQuestionEntities);
             _questionScroll = root.Q<ScrollView>("questionScroll");
             _questionText = root.Q<Label>("questionText");
+            _questionTypewriter = new TypewriterLabel(_questionText);
             _explanationSection = root.Q("explanationSection");
             _explanationText = root.Q<Label>("explanationText");
             _progressLabel = root.Q<Label>("progressLabel");
@@ -148,8 +162,10 @@ namespace ExamCards.UI
         {
             CancelRound();
             CancelSearch();
+            _questionTypewriter?.Complete();
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
+            _chapterChip?.UnregisterCallback<ClickEvent>(OnChapterClicked);
             _searchButton?.UnregisterCallback<ClickEvent>(OnSearchClicked);
             if (_search != null)
             {
@@ -266,7 +282,7 @@ namespace ExamCards.UI
             _cardsRow.Clear();
             _cards.Clear();
             ShowStatus(null);
-            _questionText.text = LoadingText;
+            _questionTypewriter.ShowImmediately(LoadingText);
 
             CancelRound();
             _roundCancellation = new CancellationTokenSource();
@@ -325,7 +341,7 @@ namespace ExamCards.UI
         void ShowLoadFailure(string message)
         {
             _loadFailed = true;
-            _questionText.text = message;
+            _questionTypewriter.ShowImmediately(message);
             _retryButton.RemoveFromClassList(HiddenClass);
         }
 
@@ -342,12 +358,38 @@ namespace ExamCards.UI
             _progressLabel.text = $"Question {_session.CurrentIndex + 1} of {_session.Total}";
 
             ShowStatus(null);
+            _showScenario = false;
             EnsureCardCount(question.Original.Answers.Count);
+            RenderPrompt(animateQuestion: true);
+        }
+
+        /// <summary>
+        /// The original text normally shows without its scenario paragraph (the chapter stands for it); the
+        /// chapter chip brings the paragraph back for the current question.
+        /// </summary>
+        void OnChapterClicked(ClickEvent evt)
+        {
+            if (_session?.Current == null || _session.IsFinished)
+                return;
+            _showScenario = !_showScenario;
             RenderPrompt();
         }
 
-        /// <summary>Shows the current text and state. Used for a new question, an answer, a 50/50 and a reveal.</summary>
-        void RenderPrompt()
+        /// <summary>"dev-tools" and "incident" as "DEV TOOLS · INCIDENT".</summary>
+        static string ChapterText(Question question)
+        {
+            var chapter = question.Scenario.Replace('-', ' ').ToUpperInvariant();
+            return string.IsNullOrEmpty(question.Stage)
+                ? chapter
+                : $"{chapter} · {question.Stage.Replace('-', ' ').ToUpperInvariant()}";
+        }
+
+        /// <summary>
+        /// Shows the current text and state. Used for a new question, an answer, a 50/50 and a reveal.
+        /// A new question types its text out; the other redraws leave a running animation alone, except an
+        /// answer or a different text, which show the text at once.
+        /// </summary>
+        void RenderPrompt(bool animateQuestion = false)
         {
             var question = _session.Current;
             var prompt = _session.CurrentPrompt;
@@ -358,18 +400,31 @@ namespace ExamCards.UI
             _progressPercent.text = $"{percent}%";
             _progressFill.style.width = Length.Percent(percent);
 
-            _questionText.text = prompt.Question;
+            // The simplified text has the scenario woven in; only the original has a stem to show instead.
+            var text = _session.IsCurrentRevealed || _showScenario ? prompt.Question : question.OriginalText;
+            if (animateQuestion && !answered)
+                _questionTypewriter.Type(text);
+            else if (answered || !_questionTypewriter.IsTyping || _questionTypewriter.Text != text)
+                _questionTypewriter.ShowImmediately(text);
             _explanationText.text = review?.Explanation;
+
+            _chapterLabel.text = ChapterText(question);
+            _chapterChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Scenario));
+            _storyBeat.text = question.Beat;
+            _storyBeat.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Beat));
+            var outcome = answered ? _session.CurrentReview?.Outcome : null;
+            _storyOutcome.text = outcome ?? string.Empty;
+            _storyOutcome.EnableInClassList(HiddenClass, string.IsNullOrEmpty(outcome));
             _explanationSection.EnableInClassList(HiddenClass, !answered);
             _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
 
-            // The large icons say what the question and each answer are about, so they show for both texts;
-            // the backend sends them with the simplified version.
+            // The large icons and entity chips say what the question and each answer are about, so they stay
+            // the same for both texts (a reveal swaps only the text); the backend sends them with the
+            // simplified version.
             var icons = question.Simplified?.Entities;
             EntityIcons.Show(_questionIcon, icons?.QuestionIcon);
 
-            // The entity chips illustrate the simplified text, so they only show with it.
-            var entities = _session.IsCurrentRevealed ? prompt.Entities : null;
+            var entities = icons;
             _questionEntities.Bind(entities?.Question);
 
             for (var i = 0; i < _cards.Count; i++)
@@ -408,8 +463,10 @@ namespace ExamCards.UI
             // Runs on the next panel update, because the new text has to be laid out first.
             _questionScroll.schedule.Execute(() =>
             {
+                // The section's top goes to the top of the view: it starts with the story's outcome, and
+                // ScrollTo would show the end of an explanation taller than the view.
                 if (toExplanation)
-                    _questionScroll.ScrollTo(_explanationSection);
+                    _questionScroll.scrollOffset = new Vector2(0, _explanationSection.layout.yMin);
                 else
                     _questionScroll.scrollOffset = Vector2.zero;
             });

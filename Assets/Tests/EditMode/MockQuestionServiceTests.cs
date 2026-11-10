@@ -18,6 +18,11 @@ namespace ExamCards.Exam.Tests
                 Assert.IsTrue(question.CanReveal, question.Id);
                 Assert.AreEqual(4, question.Original.Answers.Count, question.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(question.Original.Question), question.Id);
+                Assert.IsNotEmpty(question.Objectives, question.Id);
+                Assert.That(question.Difficulty, Is.InRange(1, 3), question.Id);
+                Assert.AreEqual(MockQuestionService.SampleScenario, question.Scenario, question.Id);
+                Assert.IsNotEmpty(question.Stage, question.Id);
+                Assert.IsNotEmpty(question.Beat, question.Id);
 
                 var review = round.SubmitAnswerAsync(question.Id, 0).GetAwaiter().GetResult();
                 Assert.That(review.CorrectIndex, Is.InRange(0, 3), question.Id);
