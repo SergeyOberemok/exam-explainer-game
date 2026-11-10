@@ -277,6 +277,43 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Icons_MapForTheQuestionEachAnswerAndEachEntity()
+        {
+            var question = ParseEntities(@"""entities"": {
+                ""question_icon"": ""workflow"",
+                ""question"": [ { ""name"": ""Subagent"", ""kind"": ""actor"", ""icon"": "" subagent "" } ],
+                ""answers"": [
+                    { ""icon"": ""refund"", ""entities"": [ { ""name"": ""Refund"", ""kind"": ""object"", ""icon"": null } ] },
+                    { ""icon"": null, ""entities"": [] }
+                ] }");
+
+            var entities = question.Simplified.Entities;
+            Assert.AreEqual("workflow", entities.QuestionIcon);
+            Assert.AreEqual("subagent", entities.Question[0].Icon);
+            Assert.IsNull(entities.ForAnswer(0)[0].Icon);
+            Assert.AreEqual("refund", entities.IconForAnswer(0));
+            Assert.IsNull(entities.IconForAnswer(1));
+            Assert.IsNull(entities.IconForAnswer(7));
+            Assert.IsNull(question.Original.Entities.QuestionIcon);
+        }
+
+        [Test]
+        public void Icons_AloneAreKept_AndBadKeysAreDropped()
+        {
+            var iconsOnly = ParseEntities(@"""entities"": {
+                ""question_icon"": ""Not A Key"", ""question"": [],
+                ""answers"": [ { ""icon"": ""hook"", ""entities"": [] }, { ""icon"": ""../x"", ""entities"": [] } ] }").Simplified.Entities;
+
+            Assert.IsFalse(iconsOnly.IsEmpty);
+            Assert.IsNull(iconsOnly.QuestionIcon);
+            CollectionAssert.AreEqual(new[] { "hook", null }, iconsOnly.AnswerIcons);
+
+            var misaligned = ParseEntities(@"""entities"": {
+                ""question"": [], ""answers"": [ { ""icon"": ""hook"", ""entities"": [] } ] }").Simplified.Entities;
+            Assert.IsTrue(misaligned.IsEmpty, "one icon for two answers doesn't line up");
+        }
+
+        [Test]
         public void Entities_Missing_AreEmpty()
         {
             Assert.IsTrue(ParseEntities(null).Simplified.Entities.IsEmpty);

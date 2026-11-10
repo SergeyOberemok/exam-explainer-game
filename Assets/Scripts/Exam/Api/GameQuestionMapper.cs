@@ -182,7 +182,8 @@ namespace ExamCards.Exam.Api
 
         /// <summary>
         /// Entities only decorate a question, so bad ones are dropped instead of failing the round: an entity
-        /// without a name or with an unknown kind, and the answers' entities when they don't line up with the answers.
+        /// without a name or with an unknown kind, the answers' entities and icons when they don't line up with the
+        /// answers, and anything that isn't an icon key.
         /// </summary>
         static PromptEntities ToEntities(GameEntitiesDto dto, int answerCount)
         {
@@ -190,12 +191,19 @@ namespace ExamCards.Exam.Api
                 return PromptEntities.Empty;
 
             var question = ToEntityList(dto.question);
-            var answers = dto.answers != null && dto.answers.Length == answerCount
+            var questionIcon = EntityIconResolver.CleanKey(dto.question_icon);
+            var aligned = dto.answers != null && dto.answers.Length == answerCount;
+            var answers = aligned
                 ? dto.answers.Select(answer => ToEntityList(answer?.entities)).ToArray()
                 : Array.Empty<IReadOnlyList<VisualEntity>>();
-            if (question.Count == 0 && answers.All(list => list.Count == 0))
+            var answerIcons = aligned
+                ? dto.answers.Select(answer => EntityIconResolver.CleanKey(answer?.icon)).ToArray()
+                : Array.Empty<string>();
+            if (answerIcons.All(icon => icon == null))
+                answerIcons = Array.Empty<string>();
+            if (question.Count == 0 && answers.All(list => list.Count == 0) && questionIcon == null && answerIcons.Length == 0)
                 return PromptEntities.Empty;
-            return new PromptEntities { Question = question, Answers = answers };
+            return new PromptEntities { QuestionIcon = questionIcon, Question = question, Answers = answers, AnswerIcons = answerIcons };
         }
 
         static IReadOnlyList<VisualEntity> ToEntityList(GameEntityDto[] dtos)
@@ -216,6 +224,7 @@ namespace ExamCards.Exam.Api
                         .Where(alias => !string.IsNullOrWhiteSpace(alias))
                         .Select(alias => alias.Trim())
                         .ToArray(),
+                    Icon = EntityIconResolver.CleanKey(dto.icon),
                 });
             }
             return entities;

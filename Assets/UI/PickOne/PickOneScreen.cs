@@ -67,6 +67,7 @@ namespace ExamCards.UI
 
         Label _categoryLabel;
         VisualElement _simplifiedBadge;
+        VisualElement _questionIcon;
         EntityStripView _questionEntities;
         ScrollView _questionScroll;
         Label _questionText;
@@ -102,6 +103,7 @@ namespace ExamCards.UI
             var root = GetComponent<UIDocument>().rootVisualElement;
             _categoryLabel = root.Q<Label>("categoryLabel");
             _simplifiedBadge = root.Q("simplifiedBadge");
+            _questionIcon = root.Q("questionIcon");
             _questionEntities = new EntityStripView(root.Q("questionEntities"), compact: false, maxShown: MaxQuestionEntities);
             _questionScroll = root.Q<ScrollView>("questionScroll");
             _questionText = root.Q<Label>("questionText");
@@ -361,13 +363,19 @@ namespace ExamCards.UI
             _explanationSection.EnableInClassList(HiddenClass, !answered);
             _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
 
-            // Entities illustrate the simplified text, so they only show with it.
+            // The large icons say what the question and each answer are about, so they show for both texts;
+            // the backend sends them with the simplified version.
+            var icons = question.Simplified?.Entities;
+            EntityIcons.Show(_questionIcon, icons?.QuestionIcon);
+
+            // The entity chips illustrate the simplified text, so they only show with it.
             var entities = _session.IsCurrentRevealed ? prompt.Entities : null;
             _questionEntities.Bind(entities?.Question);
 
             for (var i = 0; i < _cards.Count; i++)
             {
                 _cards[i].Bind(prompt.Answers[i], review?.Feedbacks[i]);
+                _cards[i].BindIcon(icons?.IconForAnswer(i));
                 _cards[i].BindEntities(entities?.ForAnswer(i));
                 _cards[i].SetState(GetCardState(i));
             }

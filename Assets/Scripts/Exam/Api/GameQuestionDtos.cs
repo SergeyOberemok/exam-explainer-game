@@ -48,6 +48,8 @@ namespace ExamCards.Exam.Api
     [Serializable]
     public sealed class GameEntitiesDto
     {
+        /// <summary>Icon key for the question as a whole; null or empty when none was picked.</summary>
+        public string question_icon;
         public GameEntityDto[] question;
         public GameAnswerEntitiesDto[] answers;
     }
@@ -57,15 +59,19 @@ namespace ExamCards.Exam.Api
     public sealed class GameAnswerEntitiesDto
     {
         public GameEntityDto[] entities;
+
+        /// <summary>Icon key for what the answer proposes; null or empty when none was picked.</summary>
+        public string icon;
     }
 
-    /// <summary>One visual entity; <c>kind</c> is "actor", "object" or "action".</summary>
+    /// <summary>One visual entity; <c>kind</c> is "actor", "object" or "action", <c>icon</c> a key of the backend's icon catalog.</summary>
     [Serializable]
     public sealed class GameEntityDto
     {
         public string name;
         public string kind;
         public string[] aliases;
+        public string icon;
     }
 
     /// <summary>One answer option of a <see cref="GameQuestionDto"/>.</summary>

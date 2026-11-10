@@ -54,12 +54,37 @@ namespace ExamCards.Exam
             public PromptEntities Entities;
         }
 
-        static VisualEntity Actor(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Actor, Aliases = aliases };
-        static VisualEntity Thing(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Object, Aliases = aliases };
-        static VisualEntity Step(string name, params string[] aliases) => new VisualEntity { Name = name, Kind = EntityKind.Action, Aliases = aliases };
+        /// <summary>Icon keys for the sample entities, as the backend would pick them; the rest get their kind's icon.</summary>
+        static readonly Dictionary<string, string> Icons = new Dictionary<string, string>
+        {
+            ["Customer"] = "user", ["User"] = "user", ["Account"] = "person",
+            ["API"] = "api", ["Call API"] = "send", ["Request"] = "send", ["Return Status Code"] = "result",
+            ["Log In"] = "permission", ["Permission"] = "permission", ["Session"] = "session",
+            ["Browser"] = "web", ["Web Page"] = "web", ["Page"] = "web", ["DNS"] = "server",
+            ["CORS"] = "policy", ["Certificate"] = "security", ["Connection"] = "link",
+            ["Database Connection"] = "database", ["Query"] = "search", ["Run Query"] = "search", ["Index"] = "steps",
+            ["Order"] = "order", ["Balance"] = "calculation", ["Transfer"] = "transfer", ["Transaction"] = "transfer",
+            ["Memory"] = "memory", ["Read Replica"] = "copy", ["Compression"] = "compress",
+            ["File"] = "file", ["Branch"] = "branch", ["Commit"] = "commit", ["Push"] = "upload", ["Force-Push"] = "upload",
+            ["Undo Commit"] = "undo", ["git revert"] = "undo", ["git reset --hard"] = "reset",
+        };
 
+        static VisualEntity Entity(string name, EntityKind kind, string[] aliases) =>
+            new VisualEntity { Name = name, Kind = kind, Aliases = aliases, Icon = Icons.TryGetValue(name, out var icon) ? icon : null };
+
+        static VisualEntity Actor(string name, params string[] aliases) => Entity(name, EntityKind.Actor, aliases);
+        static VisualEntity Thing(string name, params string[] aliases) => Entity(name, EntityKind.Object, aliases);
+        static VisualEntity Step(string name, params string[] aliases) => Entity(name, EntityKind.Action, aliases);
+
+        /// <summary>The question takes the icon of its first entity and each answer that of its own first one.</summary>
         static PromptEntities Entities(VisualEntity[] question, params VisualEntity[][] answers) =>
-            new PromptEntities { Question = question, Answers = answers };
+            new PromptEntities
+            {
+                QuestionIcon = EntityIconResolver.Resolve(question[0]),
+                Question = question,
+                Answers = answers,
+                AnswerIcons = answers.Select(answer => EntityIconResolver.Resolve(answer[0])).ToArray(),
+            };
 
         static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified) =>
             new KeyedQuestion

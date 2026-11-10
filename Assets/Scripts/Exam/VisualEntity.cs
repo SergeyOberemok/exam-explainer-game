@@ -28,9 +28,15 @@ namespace ExamCards.Exam
 
         /// <summary>Other wordings of the same thing in the text (never the name itself).</summary>
         public IReadOnlyList<string> Aliases { get; set; } = Array.Empty<string>();
+
+        /// <summary>The icon key the backend picked; null when it hasn't (see <see cref="EntityIconResolver"/>).</summary>
+        public string Icon { get; set; }
     }
 
-    /// <summary>The visual entities of one <see cref="QuestionPrompt"/>: the question's, and each answer's.</summary>
+    /// <summary>
+    /// The visual entities of one <see cref="QuestionPrompt"/>: the question's, and each answer's. It also
+    /// carries one icon key for the question and one per answer, for what each is about as a whole.
+    /// </summary>
     [Serializable]
     public sealed class PromptEntities
     {
@@ -42,10 +48,20 @@ namespace ExamCards.Exam
         /// <summary>One list per answer, index-aligned with <see cref="QuestionPrompt.Answers"/>; empty when there are none.</summary>
         public IReadOnlyList<IReadOnlyList<VisualEntity>> Answers { get; set; } = Array.Empty<IReadOnlyList<VisualEntity>>();
 
-        public bool IsEmpty => Question.Count == 0 && Answers.Count == 0;
+        /// <summary>Icon key for the question as a whole; null when the backend picked none.</summary>
+        public string QuestionIcon { get; set; }
+
+        /// <summary>One icon key per answer (null where none was picked), index-aligned like <see cref="Answers"/>; may be empty.</summary>
+        public IReadOnlyList<string> AnswerIcons { get; set; } = Array.Empty<string>();
+
+        public bool IsEmpty => Question.Count == 0 && Answers.Count == 0 && QuestionIcon == null && AnswerIcons.Count == 0;
 
         /// <returns>The entities of answer <paramref name="index"/>; empty when that answer has none.</returns>
         public IReadOnlyList<VisualEntity> ForAnswer(int index) =>
             index >= 0 && index < Answers.Count ? Answers[index] : Array.Empty<VisualEntity>();
+
+        /// <returns>The icon key of answer <paramref name="index"/>; null when it has none.</returns>
+        public string IconForAnswer(int index) =>
+            index >= 0 && index < AnswerIcons.Count ? AnswerIcons[index] : null;
     }
 }

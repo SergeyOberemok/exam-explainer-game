@@ -445,7 +445,48 @@
 .entity--action > .entity__icon { -unity-background-image-tint-color: var(--sand-ink); }
 .entity--action > .entity__name { color: var(--sand-ink); }
 
-/* Between the letter and the key chip in a card's header. */
+/* The one large icon of a question or an answer card: what it is about, always shown. */
+.hero-icon {
+    width: 40px;
+    height: 40px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--white);
+    border-width: 2px;
+    border-right-width: 3px;
+    border-bottom-width: 3px;
+    border-color: var(--ink);
+}
+
+.hero-icon__image {
+    width: 26px;
+    height: 26px;
+    -unity-background-image-tint-color: var(--brand);
+}
+
+.question__icon {
+    margin-right: 10px;
+    background-color: var(--sand);
+}
+
+.question__icon > .hero-icon__image {
+    -unity-background-image-tint-color: var(--sand-ink);
+}
+
+/* Next to the letter; the auto margin keeps the header's space-between from centring it. */
+.card__icon {
+    margin-left: 8px;
+    margin-right: auto;
+}
+
+.answer-card--correct .card__icon { background-color: var(--mint); }
+.answer-card--correct .hero-icon__image { -unity-background-image-tint-color: var(--latin); }
+.answer-card--wrong .card__icon { background-color: var(--pink); }
+.answer-card--dimmed .hero-icon__image,
+.answer-card--eliminated .hero-icon__image { -unity-background-image-tint-color: var(--muted); }
+
+/* Between the icon and the key chip in a card's header. */
 .card__entities {
     flex-direction: row;
     flex-grow: 1;

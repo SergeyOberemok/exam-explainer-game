@@ -64,6 +64,9 @@
                 <ui:VisualElement class="box question">
                     <ec:GradientElement class="question__strip" start-color="#FFDEAD" mid-color="#A83223" end-color="#FFDEAD" picking-mode="Ignore" />
                     <ui:VisualElement class="question__meta">
+                        <ui:VisualElement class="hero-icon question__icon">
+                            <ui:VisualElement name="questionIcon" class="hero-icon__image" picking-mode="Ignore" />
+                        </ui:VisualElement>
                         <ui:VisualElement class="chip chip--mint chip--raised">
                             <ui:Label name="categoryLabel" text="SECTION" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
@@ -124,7 +127,7 @@
                                 <ui:Label text="1" class="chip__text" />
                             </ui:VisualElement>
                         </ui:VisualElement>
-                        com
+                        <ui:Button name="revealButton" text="Reveal Simplified [R]" focusable="false" class="action-button" />
                         <ui:Button name="nextButton" text="Next Question" focusable="false" class="action-button action-button--primary is-hidden" />
                         <ui:Button name="retryButton" text="Retry [Enter]" focusable="false" class="action-button action-button--primary is-hidden" />
                     </ui:VisualElement>

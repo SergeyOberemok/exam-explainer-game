@@ -55,6 +55,13 @@ namespace ExamCards.Exam.Tests
                 Assert.AreEqual("x-api-key", entities.ForAnswer(1).Single().Name);
                 Assert.AreEqual(0, entities.ForAnswer(2).Count);
                 Assert.IsTrue(question.Original.Entities.IsEmpty);
+
+                // Icons: null where the backend has none (or no longer has the stored key).
+                Assert.AreEqual("credential", entities.QuestionIcon);
+                CollectionAssert.AreEqual(new[] { "credential", "send" }, entities.Question.Select(e => e.Icon));
+                CollectionAssert.AreEqual(new[] { "permission", null, "tags" }, entities.AnswerIcons);
+                Assert.IsNull(entities.ForAnswer(0).Single().Icon);
+                Assert.IsNull(entities.ForAnswer(1).Single().Icon);
             }
             Assert.IsTrue(round[1].Original.Entities.IsEmpty);
         }

@@ -592,7 +592,7 @@ PlayerSettings:
   webProgressiveAssetLoading: 0
   scriptingDefineSymbols:
     Server: ENABLE_RUNTIME_PIPELINE_DEV
-    Standalone: APP_UI_EDITOR_ONLY;ENABLE_RUNTIME_PIPELINE_DEV
+    Standalone: APP_UI_EDITOR_ONLY;ENABLE_RUNTIME_PIPELINE_DEV;SENTIS_ANALYTICS_ENABLED
   additionalCompilerArguments: {}
   platformArchitecture: {}
   scriptingBackend:
