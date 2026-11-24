@@ -9,7 +9,7 @@ namespace ExamCards.Exam.Api
     /// <summary>
     /// Starts rounds on the backend's <c>/v1/game</c> routes. One <c>POST /v1/game/rounds</c> brings the questions
     /// and their simplified versions, without the answer key; answers, 50/50 and later batches then go to that
-    /// round. Search uses <c>GET /v1/search/game-questions</c>, which also leaves the key out.
+    /// round. Search uses <c>POST /v1/search/game-questions</c>, which also leaves the key out.
     /// With the default transport, call it from the main thread (see <see cref="UnityWebRequestTransport"/>).
     /// </summary>
     public sealed class ApiQuestionService : IQuestionService, IQuestionSearch
@@ -78,8 +78,11 @@ namespace ExamCards.Exam.Api
         {
             text = QuestionSearchText.Normalize(text)
                 ?? throw new ArgumentException($"Search for at least {IQuestionSearch.MinTextLength} characters.", nameof(text));
-            var path = Prefix + "/search/game-questions?q=" + Uri.EscapeDataString(text) + "&limit=" + _searchLimit;
-            var list = await _client.GetAsync<GameQuestionListDto>(path, cancellationToken);
+            // A body, not a query string: a pasted question can be too long for a URL. Searching changes nothing,
+            // so a transient failure is retried.
+            var request = new GameSearchRequestDto { q = text, limit = _searchLimit };
+            var list = await _client.PostAsync<GameQuestionListDto>(Prefix + "/search/game-questions", request,
+                true, cancellationToken);
             return GameQuestionMapper.ToSearchResults(list);
         }
     }

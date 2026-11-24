@@ -755,7 +755,8 @@ namespace ExamCards.UI
             PlayNowOutcome outcome;
             try
             {
-                outcome = await session.PlayNowAsync(question.Id, token);
+                // The player found it by its exam wording; play it in the game's simplified text.
+                outcome = await session.PlayNowAsync(question.Id, reveal: true, cancellationToken: token);
             }
             catch (OperationCanceledException)
             {

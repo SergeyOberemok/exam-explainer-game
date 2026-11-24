@@ -194,7 +194,18 @@ namespace ExamCards.Exam.Api
         public GameQuestionDto[] simplified;
     }
 
-    /// <summary>Response of <c>GET /v1/search/game-questions</c>: playable matches, best first, without their key.</summary>
+    /// <summary>
+    /// Body of <c>POST /v1/search/game-questions</c>. A body rather than the GET's query string, because a pasted
+    /// question, percent-encoded, can pass the URL limit of a server or proxy.
+    /// </summary>
+    [Serializable]
+    public sealed class GameSearchRequestDto
+    {
+        public string q;
+        public int limit;
+    }
+
+    /// <summary>Response of <c>POST /v1/search/game-questions</c>: playable matches, best first, without their key.</summary>
     [Serializable]
     public sealed class GameQuestionListDto
     {

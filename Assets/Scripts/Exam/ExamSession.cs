@@ -305,9 +305,14 @@ namespace ExamCards.Exam
         /// added to the round and then counts towards the total. If the current question is unanswered, it is
         /// shown again right after; nothing about it is lost. If the request fails, nothing changes.
         /// </summary>
+        /// <param name="reveal">
+        /// Show the question's simplified text right away, if it has one. Ignored for the current question
+        /// (<see cref="PlayNowOutcome.AlreadyCurrent"/>), which keeps the text the player chose.
+        /// </param>
         /// <exception cref="InvalidOperationException">Finished, out of lives, or busy (see <see cref="CanPlayNow"/>).</exception>
         /// <exception cref="FormatException">The round returned a question that doesn't fit.</exception>
-        public async Task<PlayNowOutcome> PlayNowAsync(string questionId, CancellationToken cancellationToken = default)
+        public async Task<PlayNowOutcome> PlayNowAsync(string questionId, bool reveal = false,
+            CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(questionId))
                 throw new ArgumentException("No question id.", nameof(questionId));
@@ -315,6 +320,7 @@ namespace ExamCards.Exam
                 throw new InvalidOperationException(IsBusy ? "A request is still running." : "The exam is over.");
 
             var index = IndexOf(questionId);
+            // Already on screen: the player keeps whichever text they chose for it.
             if (index == CurrentIndex)
                 return PlayNowOutcome.AlreadyCurrent;
             // Everything before the current question has been answered.
@@ -348,6 +354,7 @@ namespace ExamCards.Exam
                 CurrentIndex++;
             _questions.Insert(CurrentIndex, question);
             ResetCurrent();
+            IsCurrentRevealed = reveal && question.CanReveal;
             return PlayNowOutcome.Moved;
         }
 

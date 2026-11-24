@@ -166,17 +166,17 @@ namespace ExamCards.Exam.Tests
         }";
 
         [Test]
-        public void Search_GetsWithAnEscapedQuery_AndMapsTheResults()
+        public void Search_PostsTheTextInTheBody_AndMapsTheResults()
         {
             var transport = new FakeTransport().Reply(200, SearchJson);
             var service = new ApiQuestionService(BaseUrl, 10, timeoutSeconds: 7, transport, searchLimit: 3);
 
-            var results = Run(service.SearchAsync("  a&b c/d  "));
+            var results = Run(service.SearchAsync("  a&b c/d \"x\"  "));
 
             var request = transport.Requests[0];
-            Assert.AreEqual("GET", request.Method);
-            Assert.AreEqual("http://api.test/v1/search/game-questions?q=a%26b%20c%2Fd&limit=3", request.Url);
-            Assert.IsNull(request.Body);
+            Assert.AreEqual("POST", request.Method);
+            Assert.AreEqual("http://api.test/v1/search/game-questions", request.Url);
+            Assert.AreEqual("{\"q\":\"a&b c/d \\\"x\\\"\",\"limit\":3}", request.Body);
             Assert.AreEqual(new[] { "s1", "s2" }, new[] { results[0].Id, results[1].Id });
             CollectionAssert.AreEqual(new[] { "A", "B" }, results[0].Original.Answers);
             Assert.IsFalse(results[0].CanReveal);
@@ -189,7 +189,29 @@ namespace ExamCards.Exam.Tests
             var service = new ApiQuestionService(BaseUrl, 10, 7, transport, searchLimit: 500);
 
             Assert.AreEqual(0, Run(service.SearchAsync("caching")).Count);
-            StringAssert.EndsWith($"&limit={ExamApiSettings.MaxSearchLimit}", transport.Requests[0].Url);
+            StringAssert.EndsWith($",\"limit\":{ExamApiSettings.MaxSearchLimit}}}", transport.Requests[0].Body);
+        }
+
+        [Test]
+        public void Search_RetriesATransientFailureOnce()
+        {
+            var transport = new FakeTransport().Reply(503, "{}").Reply(200, SearchJson);
+
+            Assert.AreEqual(2, Run(MakeService(transport).SearchAsync("cors")).Count);
+            Assert.AreEqual(2, transport.Requests.Count);
+        }
+
+        [Test]
+        public void Search_APastedQuestion_SendsItOnOneLine_CutToTheMaxLength()
+        {
+            var transport = new FakeTransport().Reply(200, "{\"items\":[],\"total\":0}");
+            var pasted = "Which\r\n approach\t\tshould\n\nyou use? " + new string('x', 3000);
+
+            Run(MakeService(transport).SearchAsync(pasted));
+
+            var q = UnityEngine.JsonUtility.FromJson<GameSearchRequestDto>(transport.Requests[0].Body).q;
+            StringAssert.StartsWith("Which approach should you use? xxx", q);
+            Assert.AreEqual(IQuestionSearch.MaxTextLength, q.Length);
         }
 
         [Test]

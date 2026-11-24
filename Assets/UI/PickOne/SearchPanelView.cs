@@ -30,6 +30,7 @@ namespace ExamCards.UI
         const int MaxAnswerPreview = 80;
 
         static readonly Regex Whitespace = new Regex(@"\s+");
+        static readonly char[] LineBreaks = { '\n', '\r' };
 
         readonly VisualElement _overlay;
         readonly VisualElement _closeButton;
@@ -53,6 +54,7 @@ namespace ExamCards.UI
             _overlay.RegisterCallback<ClickEvent>(OnOverlayClicked);
             _closeButton.RegisterCallback<ClickEvent>(OnCloseClicked);
             _input.RegisterValueChangedCallback(OnInputChanged);
+            _input.RegisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
         }
 
         /// <summary>The trimmed search text after typing pauses, or null when it is too short to search.</summary>
@@ -69,6 +71,7 @@ namespace ExamCards.UI
             _overlay.UnregisterCallback<ClickEvent>(OnOverlayClicked);
             _closeButton.UnregisterCallback<ClickEvent>(OnCloseClicked);
             _input.UnregisterValueChangedCallback(OnInputChanged);
+            _input.UnregisterCallback<KeyDownEvent>(OnInputKeyDown, TrickleDown.TrickleDown);
         }
 
         /// <summary>Shows the modal with the previous text and results, and focuses the text field.</summary>
@@ -147,8 +150,31 @@ namespace ExamCards.UI
             _results.schedule.Execute(() => _results.ScrollTo(row));
         }
 
+        /// <summary>
+        /// The field is multiline only so long text wraps, so it must not act on the keys PickOneScreen.HandleSearchKeys
+        /// uses: Enter (which would replace the selected text with a line break) plays the highlighted result, and
+        /// ↑/↓ (which would move the cursor between wrapped lines) move the highlight.
+        /// </summary>
+        static void OnInputKeyDown(KeyDownEvent evt)
+        {
+            if (evt.keyCode is UnityEngine.KeyCode.Return or UnityEngine.KeyCode.KeypadEnter
+                    or UnityEngine.KeyCode.UpArrow or UnityEngine.KeyCode.DownArrow
+                || evt.character is '\n' or '\r')
+                evt.StopImmediatePropagation();
+        }
+
         void OnInputChanged(ChangeEvent<string> evt)
         {
+            // Pasted line breaks become spaces (Enter itself never reaches the field, see OnInputKeyDown).
+            var value = _input.value ?? string.Empty;
+            if (value.IndexOfAny(LineBreaks) >= 0)
+            {
+                // Same length, so the cursor stays where it was.
+                var cursor = _input.cursorIndex;
+                _input.SetValueWithoutNotify(value.Replace('\r', ' ').Replace('\n', ' '));
+                _input.SelectRange(cursor, cursor);
+            }
+
             _pendingChange?.Pause();
             _pendingChange = _input.schedule.Execute(() =>
             {

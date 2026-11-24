@@ -165,7 +165,7 @@
                             <ui:VisualElement class="icon icon--exit" picking-mode="Ignore" />
                         </ui:VisualElement>
                     </ui:VisualElement>
-                    <ui:TextField name="searchInput" max-length="200" placeholder-text="Type words from a question, an answer or a section…" class="search__input" />
+                    <ui:TextField name="searchInput" max-length="8000" multiline="true" vertical-scroller-visibility="Auto" placeholder-text="Type words from a question, an answer or a section, or paste a whole question…" class="search__input" />
                     <ui:Label name="searchStatus" enable-rich-text="false" class="search__status" />
                     <ui:ScrollView name="searchResults" mode="Vertical" horizontal-scroller-visibility="Hidden" class="search__results" />
                     <ui:Label text="[↑] [↓] Choose   ·   [Enter] Play it now   ·   [Esc] Close" class="search__hint" />

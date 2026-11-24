@@ -81,7 +81,14 @@ $RECYCLE.BIN/
 # Local secrets
 .env
 
+# Written during player builds and test runs (com.unity.pipeline, com.unity.test-framework.performance)
+/Assets/Settings/Pipeline/Resources/RuntimePipelineBuildInfo.asset*
+/Assets/Settings/Pipeline/Resources/RuntimePipelineConfig.asset*
+/Assets/Resources/PerformanceTestRunInfo.json*
+/Assets/Resources/PerformanceTestRunSettings.json*
+
 # Claude Code local settings
 .claude/settings.local.json
+.claude/skills/
 
 .swagger-cache

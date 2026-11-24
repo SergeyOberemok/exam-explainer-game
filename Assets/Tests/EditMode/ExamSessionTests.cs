@@ -535,6 +535,44 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void PlayNow_WithReveal_ShowsTheSimplifiedTextWhenThereIsOne()
+        {
+            var first = MakeQuestion(0);
+            var found = MakeQuestion(1);
+            var plain = MakeQuestion(2, withSimplified: false);
+            var session = MakeSessionWithCatalog(new[] { first }, found, plain);
+            Answer(session, 0);
+
+            Assert.AreEqual(PlayNowOutcome.Moved, Run(session.PlayNowAsync(found.Question.Id, reveal: true)));
+            Assert.IsTrue(session.IsCurrentRevealed);
+            Assert.AreSame(found.Question.Simplified, session.CurrentPrompt);
+
+            // A question without a simplified version shows the original.
+            Assert.AreEqual(PlayNowOutcome.Moved, Run(session.PlayNowAsync(plain.Question.Id, reveal: true)));
+            Assert.AreSame(plain.Question, session.Current);
+            Assert.IsFalse(session.IsCurrentRevealed);
+        }
+
+        [Test]
+        public void PlayNow_WithoutReveal_ShowsTheOriginal_AndTheCurrentQuestionKeepsTheTextThePlayerChose()
+        {
+            var a = MakeQuestion(0);
+            var b = MakeQuestion(0);
+            var session = MakeSession(a, b);
+
+            Assert.AreEqual(PlayNowOutcome.Moved, PlayNow(session, b.Question.Id));
+            Assert.IsFalse(session.IsCurrentRevealed);
+
+            // The player chose the original for the question on screen; finding it again doesn't switch it.
+            Assert.AreEqual(PlayNowOutcome.AlreadyCurrent, Run(session.PlayNowAsync(b.Question.Id, reveal: true)));
+            Assert.IsFalse(session.IsCurrentRevealed);
+
+            session.Reveal();
+            Assert.AreEqual(PlayNowOutcome.AlreadyCurrent, Run(session.PlayNowAsync(b.Question.Id)));
+            Assert.IsTrue(session.IsCurrentRevealed);
+        }
+
+        [Test]
         public void PlayNow_AnUnknownQuestion_ThrowsAndChangesNothing()
         {
             var a = MakeQuestion(0);

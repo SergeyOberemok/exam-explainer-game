@@ -935,13 +935,17 @@
     color: var(--heading);
 }
 
+/* white-space on the field (not only its text) puts its scroll view in vertical mode, so the text wraps. */
 .search__input {
     margin: 0;
+    white-space: normal;
 }
 
+/* Multiline and wrapping, so a pasted question shows whole; it grows to max-height, then scrolls. */
 .search__input > .unity-base-text-field__input {
-    height: 42px;
-    padding: 0 12px;
+    min-height: 42px;
+    max-height: 160px;
+    padding: 10px 12px;
     border-radius: 0;
     border-width: 2px;
     border-right-width: 3px;
@@ -956,7 +960,8 @@
 
 .search__input .unity-text-element {
     color: var(--ink);
-    -unity-text-align: middle-left;
+    -unity-text-align: upper-left;
+    white-space: normal;
 }
 
 .search__input:focus > .unity-base-text-field__input {
