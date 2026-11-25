@@ -67,6 +67,8 @@ namespace ExamCards.UI
 
         Label _categoryLabel;
         VisualElement _chapterChip;
+        VisualElement _devIdChip;
+        Label _devIdLabel;
         Label _chapterLabel;
         Label _storyBeat;
         Label _storyOutcome;
@@ -115,6 +117,9 @@ namespace ExamCards.UI
             _storyBeat = root.Q<Label>("storyBeat");
             _storyOutcome = root.Q<Label>("storyOutcome");
             _chapterChip.RegisterCallback<ClickEvent>(OnChapterClicked);
+            _devIdChip = root.Q("devIdChip");
+            _devIdLabel = root.Q<Label>("devIdLabel");
+            _devIdChip.RegisterCallback<ClickEvent>(OnDevIdClicked);
             _simplifiedBadge = root.Q("simplifiedBadge");
             _questionIcon = root.Q("questionIcon");
             _questionEntities = new EntityStripView(root.Q("questionEntities"), compact: false, maxShown: MaxQuestionEntities);
@@ -166,6 +171,7 @@ namespace ExamCards.UI
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
             _chapterChip?.UnregisterCallback<ClickEvent>(OnChapterClicked);
+            _devIdChip?.UnregisterCallback<ClickEvent>(OnDevIdClicked);
             _searchButton?.UnregisterCallback<ClickEvent>(OnSearchClicked);
             if (_search != null)
             {
@@ -367,6 +373,26 @@ namespace ExamCards.UI
         /// The original text normally shows without its scenario paragraph (the chapter stands for it); the
         /// chapter chip brings the paragraph back for the current question.
         /// </summary>
+        // Dev only: shows the question id so it can be looked up in the database. Hidden in release builds.
+        void RenderDevId(string id)
+        {
+            // Debug.isDebugBuild is true in the Editor and development builds.
+            var show = Debug.isDebugBuild && !string.IsNullOrEmpty(id);
+            if (show)
+                _devIdLabel.text = $"ID {id}";
+            _devIdChip.EnableInClassList(HiddenClass, !show);
+        }
+
+        void OnDevIdClicked(ClickEvent evt)
+        {
+            var id = _session?.Current?.Id;
+            if (!Debug.isDebugBuild || string.IsNullOrEmpty(id))
+                return;
+            GUIUtility.systemCopyBuffer = id;
+            _devIdLabel.text = "COPIED";
+            _devIdChip.schedule.Execute(() => _devIdLabel.text = $"ID {_session?.Current?.Id}").StartingIn(1200);
+        }
+
         void OnChapterClicked(ClickEvent evt)
         {
             if (_session?.Current == null || _session.IsFinished)
@@ -410,6 +436,7 @@ namespace ExamCards.UI
 
             _chapterLabel.text = ChapterText(question);
             _chapterChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Scenario));
+            RenderDevId(question.Id);
             _storyBeat.text = question.Beat;
             _storyBeat.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Beat));
             var outcome = answered ? _session.CurrentReview?.Outcome : null;

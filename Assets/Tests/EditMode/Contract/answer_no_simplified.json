@@ -12,11 +12,19 @@
       "Feedback for tools."
     ]
   },
-  "has_simplified": false,
-  "simplified": {
-    "explanation": "",
-    "feedbacks": []
-  },
   "misconception": "",
-  "outcome": ""
+  "outcome": "",
+  "resolution": {
+    "answer_requirements": [],
+    "flow": {
+      "primary": "",
+      "secondary": [],
+      "reason": "",
+      "trigger": "",
+      "nodes": [],
+      "edges": []
+    },
+    "options": [],
+    "rule": ""
+  }
 }

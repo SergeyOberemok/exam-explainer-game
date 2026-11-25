@@ -51,7 +51,7 @@ namespace ExamCards.UI
             _scroll = root.Q<ScrollView>("cardScroll");
             _selectLabel = root.Q<Label>("selectLabel");
             _icon = root.Q("cardIcon");
-            _entities = new EntityStripView(root.Q("cardEntities"), compact: true, maxShown: MaxEntities);
+            _entities = new EntityStripView(root.Q("cardEntities"), compact: false, maxShown: MaxEntities);
 
             root.Q<Button>("selectButton").clicked += () => Selected?.Invoke(Index);
 

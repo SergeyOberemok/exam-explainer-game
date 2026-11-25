@@ -10,7 +10,6 @@
                 <ui:VisualElement class="hero-icon card__icon">
                     <ui:VisualElement name="cardIcon" class="hero-icon__image" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement name="cardEntities" class="card__entities is-hidden" />
                 <ui:VisualElement class="chip chip--peach-2 chip--raised card__key">
                     <ui:Label name="keyLabel" text="Key [1]" class="chip__text" />
                 </ui:VisualElement>
@@ -19,6 +18,7 @@
                 <ui:Label name="answerText" text="Answer" enable-rich-text="false" class="card__answer" />
                 <ui:Label name="feedbackText" text="Feedback" enable-rich-text="false" class="card__feedback is-hidden" />
             </ui:ScrollView>
+            <ui:VisualElement name="cardEntities" class="card__entities is-hidden" />
             <ui:VisualElement class="select-wrap brutal brutal--s3">
                 <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
                 <ui:Button name="selectButton" focusable="false" class="select-button">

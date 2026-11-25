@@ -382,6 +382,14 @@
     background-color: var(--gold);
 }
 
+.dev-id-chip {
+    max-width: 260px;
+}
+
+.dev-id-chip:hover {
+    background-color: var(--gold);
+}
+
 .explanation {
     margin-top: 12px;
     padding-top: 10px;
@@ -423,6 +431,11 @@
     flex-wrap: wrap;
     flex-shrink: 0;
     margin-bottom: 4px;
+}
+
+.entity-strip--bottom {
+    margin-top: 8px;
+    margin-bottom: 0;
 }
 
 .entity {
@@ -516,11 +529,9 @@
 /* Between the icon and the key chip in a card's header. */
 .card__entities {
     flex-direction: row;
-    flex-grow: 1;
-    flex-shrink: 1;
-    justify-content: flex-end;
-    overflow: hidden;
-    margin: 0 8px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    margin: 8px 0 4px 0;
 }
 
 /* ---------- answer cards ---------- */

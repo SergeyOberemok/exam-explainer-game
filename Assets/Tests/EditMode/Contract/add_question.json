@@ -20,9 +20,57 @@
       }
     ],
     "entities": {
-      "question_icon": null,
-      "question": [],
-      "answers": []
+      "question_icon": "credential",
+      "question": [
+        {
+          "name": "API Key",
+          "kind": "object",
+          "aliases": [
+            "key"
+          ],
+          "ref": "e1",
+          "icon": "credential"
+        },
+        {
+          "name": "Send Request",
+          "kind": "action",
+          "aliases": [],
+          "ref": "",
+          "icon": "send"
+        }
+      ],
+      "answers": [
+        {
+          "entities": [
+            {
+              "name": "Authorization",
+              "kind": "object",
+              "aliases": [
+                "auth header"
+              ],
+              "ref": "",
+              "icon": null
+            }
+          ],
+          "icon": "permission"
+        },
+        {
+          "entities": [
+            {
+              "name": "x-api-key",
+              "kind": "object",
+              "aliases": [],
+              "ref": "",
+              "icon": null
+            }
+          ],
+          "icon": null
+        },
+        {
+          "entities": [],
+          "icon": "tags"
+        }
+      ]
     },
     "objectives": [
       "tools-mcp-config",
@@ -32,7 +80,31 @@
     "scenario": "support",
     "stage": "build",
     "stem": "Which header carries the API key?",
-    "beat": "The first API call of the support agent is refused."
+    "beat": "The first API call of the support agent is refused.",
+    "parts": [
+      {
+        "role": "context",
+        "text": "A support agent calls the API.",
+        "entity_ids": [
+          "e1"
+        ]
+      },
+      {
+        "role": "ask",
+        "text": "Which header carries the API key?",
+        "entity_ids": [
+          "e1"
+        ]
+      }
+    ],
+    "flow": {
+      "primary": "",
+      "secondary": [],
+      "reason": "",
+      "trigger": "",
+      "nodes": [],
+      "edges": []
+    }
   },
   "simplified": [
     {
@@ -64,12 +136,14 @@
             "aliases": [
               "key"
             ],
+            "ref": "e1",
             "icon": "credential"
           },
           {
             "name": "Send Request",
             "kind": "action",
             "aliases": [],
+            "ref": "",
             "icon": "send"
           }
         ],
@@ -82,6 +156,7 @@
                 "aliases": [
                   "auth header"
                 ],
+                "ref": "",
                 "icon": null
               }
             ],
@@ -93,6 +168,7 @@
                 "name": "x-api-key",
                 "kind": "object",
                 "aliases": [],
+                "ref": "",
                 "icon": null
               }
             ],
@@ -112,7 +188,16 @@
       "scenario": "support",
       "stage": "build",
       "stem": "",
-      "beat": "The first API call of the support agent is refused."
+      "beat": "The first API call of the support agent is refused.",
+      "parts": [],
+      "flow": {
+        "primary": "",
+        "secondary": [],
+        "reason": "",
+        "trigger": "",
+        "nodes": [],
+        "edges": []
+      }
     }
   ]
 }
