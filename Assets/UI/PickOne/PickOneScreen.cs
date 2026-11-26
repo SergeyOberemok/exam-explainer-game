@@ -24,6 +24,7 @@ namespace ExamCards.UI
     public sealed class PickOneScreen : MonoBehaviour
     {
         const string HiddenClass = "is-hidden";
+        const string ActiveTabClass = "panel-tab--active";
         /// <summary>Icons shown for the question; the rest would crowd out the text.</summary>
         const int MaxQuestionEntities = 8;
         const string ResultsHiddenClass = "results--hidden";
@@ -72,9 +73,28 @@ namespace ExamCards.UI
         Label _chapterLabel;
         Label _storyBeat;
         Label _storyOutcome;
+        Label _resolutionRule;
+        QuestionPartsView _questionParts;
+        VisualElement _difficultyChip;
+        Label _difficultyLabel;
+        VisualElement _objectiveChip;
+        Label _objectiveLabel;
+        VisualElement _panelTabs;
+        VisualElement _debriefTab;
+        VisualElement _questionTab;
+        VisualElement _misconceptionSection;
+        Label _misconceptionText;
+        Label _requirementsTitle;
+        RequirementsView _requirements;
 
         /// <summary>The player asked to see the scenario paragraph of the current question again.</summary>
         bool _showScenario;
+
+        /// <summary>
+        /// The answered question's panel shows the question instead of its debrief; reset per question, so an
+        /// answer opens the debrief.
+        /// </summary>
+        bool _showQuestionAfterAnswer;
         VisualElement _simplifiedBadge;
         VisualElement _questionIcon;
         EntityStripView _questionEntities;
@@ -116,6 +136,21 @@ namespace ExamCards.UI
             _chapterLabel = root.Q<Label>("chapterLabel");
             _storyBeat = root.Q<Label>("storyBeat");
             _storyOutcome = root.Q<Label>("storyOutcome");
+            _resolutionRule = root.Q<Label>("resolutionRule");
+            _questionParts = new QuestionPartsView(root.Q("questionParts"));
+            _difficultyChip = root.Q("difficultyChip");
+            _difficultyLabel = root.Q<Label>("difficultyLabel");
+            _objectiveChip = root.Q("objectiveChip");
+            _objectiveLabel = root.Q<Label>("objectiveLabel");
+            _panelTabs = root.Q("panelTabs");
+            _debriefTab = root.Q("debriefTab");
+            _questionTab = root.Q("questionTab");
+            _debriefTab.RegisterCallback<ClickEvent>(OnDebriefTabClicked);
+            _questionTab.RegisterCallback<ClickEvent>(OnQuestionTabClicked);
+            _misconceptionSection = root.Q("misconceptionSection");
+            _misconceptionText = root.Q<Label>("misconceptionText");
+            _requirementsTitle = root.Q<Label>("requirementsTitle");
+            _requirements = new RequirementsView(root);
             _chapterChip.RegisterCallback<ClickEvent>(OnChapterClicked);
             _devIdChip = root.Q("devIdChip");
             _devIdLabel = root.Q<Label>("devIdLabel");
@@ -171,6 +206,8 @@ namespace ExamCards.UI
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
             _chapterChip?.UnregisterCallback<ClickEvent>(OnChapterClicked);
+            _debriefTab?.UnregisterCallback<ClickEvent>(OnDebriefTabClicked);
+            _questionTab?.UnregisterCallback<ClickEvent>(OnQuestionTabClicked);
             _devIdChip?.UnregisterCallback<ClickEvent>(OnDevIdClicked);
             _searchButton?.UnregisterCallback<ClickEvent>(OnSearchClicked);
             if (_search != null)
@@ -235,6 +272,12 @@ namespace ExamCards.UI
             if (keyboard[Key.F].wasPressedThisFrame)
             {
                 OnFiftyFiftyPressed();
+                return;
+            }
+
+            if (keyboard[Key.Q].wasPressedThisFrame)
+            {
+                ShowQuestionAfterAnswer(!_showQuestionAfterAnswer);
                 return;
             }
 
@@ -365,6 +408,7 @@ namespace ExamCards.UI
 
             ShowStatus(null);
             _showScenario = false;
+            _showQuestionAfterAnswer = false;
             EnsureCardCount(question.Original.Answers.Count);
             RenderPrompt(animateQuestion: true);
         }
@@ -398,6 +442,22 @@ namespace ExamCards.UI
             if (_session?.Current == null || _session.IsFinished)
                 return;
             _showScenario = !_showScenario;
+            // The text it changes is on the question tab.
+            if (_session.IsCurrentAnswered)
+                _showQuestionAfterAnswer = true;
+            RenderPrompt();
+        }
+
+        void OnDebriefTabClicked(ClickEvent evt) => ShowQuestionAfterAnswer(false);
+
+        void OnQuestionTabClicked(ClickEvent evt) => ShowQuestionAfterAnswer(true);
+
+        /// <summary>Switches an answered question's panel between its debrief and the question (Q).</summary>
+        void ShowQuestionAfterAnswer(bool show)
+        {
+            if (_session?.Current == null || _session.IsFinished || !_session.IsCurrentAnswered)
+                return;
+            _showQuestionAfterAnswer = show;
             RenderPrompt();
         }
 
@@ -426,8 +486,18 @@ namespace ExamCards.UI
             _progressPercent.text = $"{percent}%";
             _progressFill.style.width = Length.Percent(percent);
 
-            // The simplified text has the scenario woven in; only the original has a stem to show instead.
-            var text = _session.IsCurrentRevealed || _showScenario ? prompt.Question : question.OriginalText;
+            // The simplified text has the scenario woven in; only the original has a stem to show instead, or,
+            // when the backend decomposed it, its ask with the scenario's facts as parts under it.
+            var fullText = _session.IsCurrentRevealed || _showScenario;
+            var ask = fullText ? null : question.Ask;
+            var text = fullText ? prompt.Question : ask ?? question.OriginalText;
+            // Once answered, the panel shows the debrief or, on the question tab, the question without it.
+            var debrief = answered && !_showQuestionAfterAnswer;
+            _questionParts.Bind(ask != null && !debrief ? question.Parts : null);
+            _questionText.EnableInClassList(HiddenClass, debrief);
+            _panelTabs.EnableInClassList(HiddenClass, !answered);
+            _debriefTab.EnableInClassList(ActiveTabClass, debrief);
+            _questionTab.EnableInClassList(ActiveTabClass, answered && !debrief);
             if (animateQuestion && !answered)
                 _questionTypewriter.Type(text);
             else if (answered || !_questionTypewriter.IsTyping || _questionTypewriter.Text != text)
@@ -438,27 +508,37 @@ namespace ExamCards.UI
             _chapterChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Scenario));
             RenderDevId(question.Id);
             _storyBeat.text = question.Beat;
-            _storyBeat.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Beat));
+            _storyBeat.EnableInClassList(HiddenClass, debrief || string.IsNullOrEmpty(question.Beat));
+            _difficultyLabel.text = QuestionLabels.Difficulty(question.Difficulty);
+            _difficultyChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_difficultyLabel.text));
+            // The objective can name the answer ("sessions"), so it is part of the debrief.
+            _objectiveLabel.text = answered && question.Objectives.Count > 0 ? QuestionLabels.Objective(question.Objectives[0]) : string.Empty;
+            _objectiveChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_objectiveLabel.text));
             var outcome = answered ? _session.CurrentReview?.Outcome : null;
             _storyOutcome.text = outcome ?? string.Empty;
             _storyOutcome.EnableInClassList(HiddenClass, string.IsNullOrEmpty(outcome));
-            _explanationSection.EnableInClassList(HiddenClass, !answered);
+            var resolution = answered ? _session.CurrentReview?.Resolution : null;
+            _resolutionRule.text = resolution?.Rule ?? string.Empty;
+            _resolutionRule.EnableInClassList(HiddenClass, string.IsNullOrEmpty(resolution?.Rule));
+            _explanationSection.EnableInClassList(HiddenClass, !debrief);
+            _explanationSection.EnableInClassList("explanation--alone", debrief);
+            RenderDebrief(answered ? _session.CurrentReview : null, review);
             _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
 
             // The large icons and entity chips say what the question and each answer are about, so they stay
-            // the same for both texts (a reveal swaps only the text); the backend sends them with the
-            // simplified version.
-            var icons = question.Simplified?.Entities;
-            EntityIcons.Show(_questionIcon, icons?.QuestionIcon);
-
-            var entities = icons;
-            _questionEntities.Bind(entities?.Question);
+            // the same for both texts (a reveal swaps only the text); the backend sends the same ones with both.
+            var entities = question.Entities;
+            EntityIcons.Show(_questionIcon, entities.QuestionIcon);
+            _questionEntities.Bind(entities.Question);
 
             for (var i = 0; i < _cards.Count; i++)
             {
                 _cards[i].Bind(prompt.Answers[i], review?.Feedbacks[i]);
-                _cards[i].BindIcon(icons?.IconForAnswer(i));
-                _cards[i].BindEntities(entities?.ForAnswer(i));
+                _cards[i].BindIcon(entities.IconForAnswer(i));
+                // The question's strip already shows the entities every answer shares.
+                _cards[i].BindEntities(entities.ForAnswerOnly(i));
+                _cards[i].BindResolution(
+                    resolution?.ForAnswer(i), resolution?.MetCount(i) ?? 0, resolution?.AnswerRequirements.Count ?? 0);
                 _cards[i].SetState(GetCardState(i));
             }
 
@@ -473,7 +553,30 @@ namespace ExamCards.UI
             _nextButton.text = _session.IsLastQuestion ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
 
-            ScrollQuestionPanel(answered);
+            ScrollQuestionPanel();
+        }
+
+        /// <summary>
+        /// The debrief's lists: why the answer that counts was tempting (when wrong), what the answer had to do
+        /// with a mark for each requirement it met, and every answer's feedback. A null review clears them.
+        /// </summary>
+        void RenderDebrief(AnswerReview review, PromptReview promptReview)
+        {
+            var counted = review == null ? null : _session.AnsweredIndex;
+            var wrong = review != null && counted != review.CorrectIndex;
+            var misconception = wrong ? review.Misconception : null;
+            _misconceptionText.text = misconception ?? string.Empty;
+            _misconceptionSection.EnableInClassList(HiddenClass, string.IsNullOrEmpty(misconception));
+
+            var resolution = review?.Resolution;
+            var requirements = resolution?.AnswerRequirements;
+            var met = counted is int index ? resolution?.RequirementsMetBy(index) : null;
+            var metCount = met?.Count(m => m) ?? 0;
+            _requirementsTitle.text = requirements == null || met == null || met.Count == 0
+                ? "What the answer had to do"
+                : $"What the answer had to do · yours meets {metCount} of {requirements.Count}";
+            _requirements.BindRequirements(requirements, met);
+            _requirements.BindAnswerNotes(review == null ? null : promptReview?.Feedbacks, review?.CorrectIndex ?? -1, counted);
         }
 
         AnswerCardState GetCardState(int index)
@@ -485,19 +588,12 @@ namespace ExamCards.UI
             return index == _session.AnsweredIndex ? AnswerCardState.Wrong : AnswerCardState.Dimmed;
         }
 
-        void ScrollQuestionPanel(bool toExplanation)
-        {
-            // Runs on the next panel update, because the new text has to be laid out first.
-            _questionScroll.schedule.Execute(() =>
-            {
-                // The section's top goes to the top of the view: it starts with the story's outcome, and
-                // ScrollTo would show the end of an explanation taller than the view.
-                if (toExplanation)
-                    _questionScroll.scrollOffset = new Vector2(0, _explanationSection.layout.yMin);
-                else
-                    _questionScroll.scrollOffset = Vector2.zero;
-            });
-        }
+        /// <summary>
+        /// Scrolls the panel to its top: the question, or the debrief, which starts with the story's outcome.
+        /// Runs on the next panel update, because the new text has to be laid out first.
+        /// </summary>
+        void ScrollQuestionPanel() =>
+            _questionScroll.schedule.Execute(() => _questionScroll.scrollOffset = Vector2.zero);
 
         void EnsureCardCount(int count)
         {
@@ -584,7 +680,12 @@ namespace ExamCards.UI
             if (_session == null)
                 return;
             if (_session.ToggleSimplified())
+            {
+                // The text it swaps is on the question tab.
+                if (_session.IsCurrentAnswered)
+                    _showQuestionAfterAnswer = true;
                 RenderPrompt();
+            }
         }
 
         void OnNextPressed()

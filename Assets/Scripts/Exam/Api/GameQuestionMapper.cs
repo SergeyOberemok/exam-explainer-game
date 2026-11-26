@@ -126,6 +126,9 @@ namespace ExamCards.Exam.Api
                 Stage = EntityIconResolver.CleanKey(original.stage) ?? string.Empty,
                 Stem = original.stem?.Trim() ?? string.Empty,
                 Beat = original.beat?.Trim() ?? string.Empty,
+                // Only originals have parts; the rephrase gets the same flow, so it stands in for a missing one.
+                Parts = ToParts(original.parts),
+                Flow = ToFlow(original.flow) is { IsEmpty: false } flow ? flow : ToFlow(simplified?.flow),
             };
             QuestionValidator.ValidateQuestion(question);
             return question;
@@ -163,7 +166,7 @@ namespace ExamCards.Exam.Api
                 AnsweredIndex = result.answer_index,
                 CorrectIndex = result.correct_index,
                 Original = ToPromptReview(result.original),
-                Simplified = result.has_simplified ? ToPromptReview(result.simplified) : null,
+                Resolution = ToResolution(result.resolution, result.correct_index),
                 // The backend sends it only for a wrong answer; never show one next to a correct answer.
                 Misconception = result.is_correct ? string.Empty : result.misconception?.Trim() ?? string.Empty,
                 Outcome = result.outcome?.Trim() ?? string.Empty,
@@ -246,6 +249,7 @@ namespace ExamCards.Exam.Api
                         .Select(alias => alias.Trim())
                         .ToArray(),
                     Icon = EntityIconResolver.CleanKey(dto.icon),
+                    Ref = dto.@ref?.Trim() ?? string.Empty,
                 });
             }
             return entities;
@@ -261,6 +265,186 @@ namespace ExamCards.Exam.Api
                 default: kind = default; return false;
             }
         }
+
+        // Parts, flows and resolutions only explain a question, so, like entities, bad pieces are dropped
+        // instead of failing the round.
+
+        static IReadOnlyList<QuestionPart> ToParts(GamePartDto[] dtos)
+        {
+            var parts = new List<QuestionPart>();
+            foreach (var dto in dtos ?? Array.Empty<GamePartDto>())
+            {
+                if (dto == null || string.IsNullOrWhiteSpace(dto.text) || !TryParsePartRole(dto.role, out var role))
+                    continue;
+                parts.Add(new QuestionPart { Role = role, Text = dto.text.Trim(), EntityRefs = CleanList(dto.entity_ids) });
+            }
+            return parts;
+        }
+
+        /// <summary>
+        /// Drops nodes without a unique id or a known type, and edges that don't join two kept nodes or have an
+        /// unknown type. An unknown status counts as <see cref="FlowStatus.Unknown"/>.
+        /// </summary>
+        static DecisionFlow ToFlow(GameFlowDto dto)
+        {
+            if (dto?.nodes == null || dto.nodes.Length == 0)
+                return DecisionFlow.Empty;
+
+            var nodes = new List<FlowNode>();
+            var ids = new HashSet<string>();
+            foreach (var node in dto.nodes)
+            {
+                var id = node?.id?.Trim();
+                if (string.IsNullOrEmpty(id) || !TryParseNodeType(node.type, out var type) || !ids.Add(id))
+                    continue;
+                nodes.Add(new FlowNode
+                {
+                    Id = id,
+                    Type = type,
+                    Label = node.label?.Trim() ?? string.Empty,
+                    EntityRefs = CleanList(node.entity_ids),
+                    ConditionId = node.condition_id?.Trim() ?? string.Empty,
+                    Status = ToStatus(node.source_status),
+                    IsQuestion = node.is_question,
+                    Added = node.added,
+                });
+            }
+            if (nodes.Count == 0)
+                return DecisionFlow.Empty;
+
+            var edges = new List<FlowEdge>();
+            foreach (var edge in dto.edges ?? Array.Empty<FlowEdgeDto>())
+            {
+                var source = edge?.source?.Trim();
+                var target = edge?.target?.Trim();
+                if (source == null || target == null || !ids.Contains(source) || !ids.Contains(target)
+                    || !TryParseEdgeType(edge.type, out var type))
+                    continue;
+                edges.Add(new FlowEdge
+                {
+                    Source = source,
+                    Target = target,
+                    Type = type,
+                    Label = edge.label?.Trim() ?? string.Empty,
+                    Status = ToStatus(edge.source_status),
+                    Added = edge.added,
+                });
+            }
+
+            return new DecisionFlow
+            {
+                Primary = dto.primary?.Trim() ?? string.Empty,
+                Secondary = CleanList(dto.secondary),
+                Reason = dto.reason?.Trim() ?? string.Empty,
+                Trigger = dto.trigger?.Trim() ?? string.Empty,
+                Nodes = nodes,
+                Edges = edges,
+            };
+        }
+
+        /// <summary>
+        /// Drops options with a negative or repeated index or an unknown verdict, and all of them if a verdict
+        /// contradicts <paramref name="correctIndex"/>: reasons that disagree with the key would mislead.
+        /// An option for an answer the question doesn't have is harmless, since the screen asks by index.
+        /// </summary>
+        static Resolution ToResolution(GameResolutionDto dto, int correctIndex)
+        {
+            if (dto == null)
+                return Resolution.Empty;
+
+            var options = new List<OptionEvaluation>();
+            var indices = new HashSet<int>();
+            foreach (var option in dto.options ?? Array.Empty<OptionEvaluationDto>())
+            {
+                if (option == null || option.index < 0 || !indices.Add(option.index))
+                    continue;
+                bool isCorrect;
+                if (option.verdict == "correct")
+                    isCorrect = true;
+                else if (option.verdict == "incorrect")
+                    isCorrect = false;
+                else
+                    continue;
+                if (isCorrect != (option.index == correctIndex))
+                {
+                    options.Clear();
+                    break;
+                }
+                options.Add(new OptionEvaluation
+                {
+                    Index = option.index,
+                    IsCorrect = isCorrect,
+                    SupportedRequirements = CleanList(option.supported_requirements),
+                    Gaps = CleanList(option.gaps),
+                    Reason = option.reason?.Trim() ?? string.Empty,
+                });
+            }
+
+            var resolution = new Resolution
+            {
+                AnswerRequirements = CleanList(dto.answer_requirements),
+                Flow = ToFlow(dto.flow),
+                Options = options,
+                Rule = dto.rule?.Trim() ?? string.Empty,
+            };
+            return resolution.IsEmpty ? Resolution.Empty : resolution;
+        }
+
+        static IReadOnlyList<string> CleanList(string[] values) =>
+            (values ?? Array.Empty<string>())
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Select(value => value.Trim())
+                .ToArray();
+
+        static bool TryParsePartRole(string value, out PartRole role)
+        {
+            switch (value)
+            {
+                case "context": role = PartRole.Context; return true;
+                case "current_state": role = PartRole.CurrentState; return true;
+                case "problem": role = PartRole.Problem; return true;
+                case "consequence": role = PartRole.Consequence; return true;
+                case "goal": role = PartRole.Goal; return true;
+                case "constraint": role = PartRole.Constraint; return true;
+                case "ask": role = PartRole.Ask; return true;
+                default: role = default; return false;
+            }
+        }
+
+        static bool TryParseNodeType(string value, out FlowNodeType type)
+        {
+            switch (value)
+            {
+                case "start": type = FlowNodeType.Start; return true;
+                case "process": type = FlowNodeType.Process; return true;
+                case "decision": type = FlowNodeType.Decision; return true;
+                case "input": type = FlowNodeType.Input; return true;
+                case "output": type = FlowNodeType.Output; return true;
+                case "human_review": type = FlowNodeType.HumanReview; return true;
+                case "end": type = FlowNodeType.End; return true;
+                default: type = default; return false;
+            }
+        }
+
+        static bool TryParseEdgeType(string value, out FlowEdgeType type)
+        {
+            switch (value)
+            {
+                case "next": type = FlowEdgeType.Next; return true;
+                case "yes": type = FlowEdgeType.Yes; return true;
+                case "no": type = FlowEdgeType.No; return true;
+                case "unknown": type = FlowEdgeType.Unknown; return true;
+                case "approved": type = FlowEdgeType.Approved; return true;
+                case "rejected": type = FlowEdgeType.Rejected; return true;
+                case "custom": type = FlowEdgeType.Custom; return true;
+                default: type = default; return false;
+            }
+        }
+
+        static FlowStatus ToStatus(string value) =>
+            value == "explicit" ? FlowStatus.Explicit
+            : value == "inferred" ? FlowStatus.Inferred
+            : FlowStatus.Unknown;
 
         static PromptReview ToPromptReview(GameReviewDto dto) => new PromptReview
         {

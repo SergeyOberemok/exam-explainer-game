@@ -343,6 +343,20 @@
     letter-spacing: 0.55px;
 }
 
+/* The long, low-value chips (the section, the dev id) shorten with an ellipsis so the others and the panel
+   tabs stay whole; runtime panels show no tooltips, so a cut chip would lose its text. */
+.question__meta > .meta-chip--shrink {
+    flex-shrink: 1;
+    min-width: 40px;
+    overflow: hidden;
+}
+
+.question__meta > .meta-chip--shrink > .chip__text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 .question__scroll {
     flex-grow: 1;
     flex-shrink: 1;
@@ -357,6 +371,52 @@
     letter-spacing: 0.2px;
     word-spacing: 1px;
     color: var(--heading);
+    white-space: normal;
+}
+
+/* The scenario's facts before the ask, one row each with its role (QuestionPartsView). */
+/* Under the ask, so the question itself is the first thing the panel shows. */
+.question-parts {
+    flex-shrink: 0;
+    margin-top: 10px;
+}
+
+.question-part {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.question-part__role {
+    width: 92px;
+    margin-top: 1px;
+    margin-right: 10px;
+    justify-content: center;
+}
+
+.question-part__role > .chip__text {
+    -unity-text-align: middle-center;
+    flex-grow: 1;
+}
+
+.question-part__text {
+    flex-shrink: 1;
+    flex-grow: 1;
+    font-size: 15px;
+    color: var(--muted);
+    white-space: normal;
+}
+
+/* The one-line lesson of the answered question (the backend's resolution). */
+.resolution-rule {
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    border-left-width: 3px;
+    border-color: var(--latin);
+    background-color: var(--mint-soft);
+    font-size: 14px;
+    -unity-font-style: bold;
+    color: var(--mint-ink);
     white-space: normal;
 }
 
@@ -409,6 +469,129 @@
     font-size: 15px;
     color: var(--muted);
     white-space: normal;
+}
+
+/* In the debrief tab the section is all the panel shows, so it needs no separator. */
+.explanation--alone {
+    margin-top: 0;
+    padding-top: 0;
+    border-top-width: 0;
+}
+
+/* Misconception, requirements and answer notes of the debrief. */
+.debrief-block {
+    margin-bottom: 10px;
+}
+
+/* The answer notes follow the explanation text, which has no margin of its own. */
+#answerNotesSection {
+    margin-top: 12px;
+}
+
+.misconception {
+    font-size: 14px;
+    -unity-font-style: italic;
+    color: var(--pink-ink);
+    white-space: normal;
+}
+
+.requirement {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 4px;
+}
+
+.requirement__mark {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    border-width: 1px;
+    border-color: var(--ink);
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+}
+
+.requirement__mark--met {
+    background-color: var(--mint);
+    color: var(--mint-ink);
+}
+
+.requirement__mark--missed {
+    background-color: var(--pink);
+    color: var(--pink-ink);
+}
+
+.requirement__text {
+    flex-shrink: 1;
+    flex-grow: 1;
+    font-size: 14px;
+    color: var(--heading);
+    white-space: normal;
+}
+
+.answer-note {
+    flex-direction: row;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.answer-note__letter {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+    flex-shrink: 0;
+    border-width: 1px;
+    border-color: var(--ink);
+    background-color: var(--peach);
+    font-size: 12px;
+    -unity-font-style: bold;
+    -unity-text-align: middle-center;
+    color: var(--ink);
+}
+
+.answer-note__letter--correct {
+    background-color: var(--mint);
+    color: var(--mint-ink);
+}
+
+.answer-note__letter--wrong {
+    background-color: var(--pink);
+    color: var(--pink-ink);
+}
+
+.answer-note__text {
+    flex-shrink: 1;
+    flex-grow: 1;
+    font-size: 13px;
+    color: var(--muted);
+    white-space: normal;
+}
+
+/* Debrief / question switch of an answered question, at the right of the chip row. */
+.panel-tabs {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.question__meta > .panel-tabs > .panel-tab {
+    margin-left: 6px;
+    padding: 3px 11px;
+    background-color: var(--cream);
+}
+
+.question__meta > .panel-tabs > .panel-tab:hover {
+    background-color: var(--peach-2);
+}
+
+.question__meta > .panel-tabs > .panel-tab--active {
+    background-color: var(--ink);
+}
+
+.question__meta > .panel-tabs > .panel-tab--active > .chip__text {
+    color: var(--white);
 }
 
 /* Why the last answer or 50/50 request failed; right-aligned in the question's chip row. */
@@ -601,6 +784,35 @@
     border-color: var(--ink);
     font-size: 13px;
     color: var(--muted);
+    white-space: normal;
+}
+
+/* Why the answer is right or wrong, and what it misses (the backend's resolution). The reason takes the
+   feedback's place on the card, so it has the feedback's separator. */
+.card__reason {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top-width: 1px;
+    border-color: var(--ink);
+    font-size: 13px;
+    -unity-font-style: italic;
+    color: var(--heading);
+    white-space: normal;
+}
+
+.card__met {
+    margin-top: 4px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--latin);
+    white-space: normal;
+}
+
+.card__gaps {
+    margin-top: 4px;
+    font-size: 12px;
+    -unity-font-style: bold;
+    color: var(--brand);
     white-space: normal;
 }
 

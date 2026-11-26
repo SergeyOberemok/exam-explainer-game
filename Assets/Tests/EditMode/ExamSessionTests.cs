@@ -33,7 +33,6 @@ namespace ExamCards.Exam.Tests
             {
                 CorrectIndex = correctIndex,
                 Original = MakeReview("original"),
-                Simplified = withSimplified ? MakeReview("simplified") : null,
             },
         };
 
@@ -89,7 +88,7 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void Answer_SetsReview_AndReviewFollowsReveal()
+        public void Answer_SetsReview_AndBothTextsShareIt()
         {
             var question = MakeQuestion(1);
             var session = MakeSession(question);
@@ -100,8 +99,9 @@ namespace ExamCards.Exam.Tests
             Assert.AreSame(question.Review, session.CurrentReview);
             Assert.AreSame(question.Review.Original, session.CurrentPromptReview);
 
+            // The simplified text has no review of its own; its answers line up with the original's.
             session.Reveal();
-            Assert.AreSame(question.Review.Simplified, session.CurrentPromptReview);
+            Assert.AreSame(question.Review.Original, session.CurrentPromptReview);
         }
 
         [Test]

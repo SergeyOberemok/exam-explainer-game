@@ -40,7 +40,7 @@ namespace ExamCards.Exam.Api
         public string question;
         public GameAnswerDto[] answers;
 
-        /// <summary>Visual entities; empty lists for originals (and null when the field is missing).</summary>
+        /// <summary>Visual entities, the same for both versions; empty lists without a decomposition (and null when the field is missing).</summary>
         public GameEntitiesDto entities;
 
         /// <summary>Learning-objective keys, the main one first; empty (or null when missing) for an untagged question.</summary>
@@ -60,6 +60,61 @@ namespace ExamCards.Exam.Api
 
         /// <summary>One story line to show before the question; empty until the question has a story record.</summary>
         public string beat;
+
+        /// <summary>The question as facts and its ask; originals only, empty without a decomposition.</summary>
+        public GamePartDto[] parts;
+
+        /// <summary>The pre-answer flow; empty lists without one.</summary>
+        public GameFlowDto flow;
+    }
+
+    /// <summary>One piece of a question; <c>role</c> is context, current_state, problem, consequence, goal, constraint or ask.</summary>
+    [Serializable]
+    public sealed class GamePartDto
+    {
+        public string role;
+        public string text;
+
+        /// <summary>The <c>ref</c>s of the entities the part names.</summary>
+        public string[] entity_ids;
+    }
+
+    /// <summary>A flow chart, flat and null-free; every list is empty when the question has none.</summary>
+    [Serializable]
+    public sealed class GameFlowDto
+    {
+        public string primary;
+        public string[] secondary;
+        public string reason;
+        public string trigger;
+        public FlowNodeDto[] nodes;
+        public FlowEdgeDto[] edges;
+    }
+
+    /// <summary><c>type</c>: start, process, decision, input, output, human_review, end; <c>source_status</c>: explicit, inferred, unknown.</summary>
+    [Serializable]
+    public sealed class FlowNodeDto
+    {
+        public string id;
+        public string type;
+        public string label;
+        public string[] entity_ids;
+        public string condition_id;
+        public string source_status;
+        public bool is_question;
+        public bool added;
+    }
+
+    /// <summary><c>type</c>: next, yes, no, unknown, approved, rejected, custom.</summary>
+    [Serializable]
+    public sealed class FlowEdgeDto
+    {
+        public string source;
+        public string target;
+        public string type;
+        public string label;
+        public string source_status;
+        public bool added;
     }
 
     /// <summary>The visual entities of a <see cref="GameQuestionDto"/>; <c>answers</c> is index-aligned with its answers.</summary>
@@ -90,6 +145,9 @@ namespace ExamCards.Exam.Api
         public string kind;
         public string[] aliases;
         public string icon;
+
+        /// <summary>The entity's decomposition id (JSON key <c>ref</c>; the <c>@</c> only escapes the keyword).</summary>
+        public string @ref;
     }
 
     /// <summary>One answer option of a <see cref="GameQuestionDto"/>.</summary>
@@ -140,17 +198,40 @@ namespace ExamCards.Exam.Api
         public int answer_index;
         public bool is_correct;
         public int correct_index;
+        /// <summary>The only review: the simplified text has none of its own.</summary>
         public GameReviewDto original;
-        public bool has_simplified;
-
-        /// <summary>Empty when <see cref="has_simplified"/> is false.</summary>
-        public GameReviewDto simplified;
 
         /// <summary>What <see cref="answer_index"/> suggests the player got wrong; empty for the correct answer or an untagged question.</summary>
         public string misconception;
 
         /// <summary>What the answer leads to in the story; empty for a question without a story record.</summary>
         public string outcome;
+
+        /// <summary>Why the correct answer is correct; empty lists and strings when the backend has none.</summary>
+        public GameResolutionDto resolution;
+    }
+
+    [Serializable]
+    public sealed class GameResolutionDto
+    {
+        public string[] answer_requirements;
+
+        /// <summary>The pre-answer flow without its question node, continued with steps marked <c>added</c>.</summary>
+        public GameFlowDto flow;
+
+        public OptionEvaluationDto[] options;
+        public string rule;
+    }
+
+    /// <summary>One answer compared with the requirements; <c>verdict</c> is "correct" or "incorrect".</summary>
+    [Serializable]
+    public sealed class OptionEvaluationDto
+    {
+        public int index;
+        public string verdict;
+        public string[] supported_requirements;
+        public string[] gaps;
+        public string reason;
     }
 
     /// <summary>Feedback and explanation of one version of an answered question.</summary>

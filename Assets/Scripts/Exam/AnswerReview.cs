@@ -2,7 +2,7 @@ using System;
 
 namespace ExamCards.Exam
 {
-    /// <summary>The outcome of answering a question: the correct answer and both versions' review.</summary>
+    /// <summary>The outcome of answering a question: the correct answer, its review and resolution.</summary>
     [Serializable]
     public sealed class AnswerReview
     {
@@ -15,10 +15,14 @@ namespace ExamCards.Exam
         /// <summary>Index of the correct answer; the same for both versions of the text.</summary>
         public int CorrectIndex { get; set; }
 
+        /// <summary>
+        /// Feedback per answer and the explanation. The simplified text has no review of its own: its answers
+        /// are index-aligned with the original's, so this one fits both.
+        /// </summary>
         public PromptReview Original { get; set; }
 
-        /// <summary>Review of the simplified text. Null when the question has no simplified version.</summary>
-        public PromptReview Simplified { get; set; }
+        /// <summary>Why the correct answer is correct, answer by answer; <see cref="Exam.Resolution.Empty"/> when the backend has none.</summary>
+        public Resolution Resolution { get; set; } = Resolution.Empty;
 
         /// <summary>
         /// What the answer that counts suggests the player got wrong, in one sentence. Empty for the correct
@@ -38,7 +42,7 @@ namespace ExamCards.Exam
             AnsweredIndex = answeredIndex,
             CorrectIndex = CorrectIndex,
             Original = Original,
-            Simplified = Simplified,
+            Resolution = Resolution,
             Misconception = Misconception,
             Outcome = Outcome,
         };

@@ -13,7 +13,7 @@ namespace ExamCards.Exam
         public string Question { get; set; }
         public IReadOnlyList<string> Answers { get; set; } = Array.Empty<string>();
 
-        /// <summary>What the text mentions, as icons can show it. Only simplified versions have any.</summary>
+        /// <summary>What the text mentions, as icons can show it; empty for questions the backend hasn't decomposed and for search results.</summary>
         public PromptEntities Entities { get; set; } = PromptEntities.Empty;
     }
 }

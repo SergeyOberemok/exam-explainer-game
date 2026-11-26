@@ -49,6 +49,37 @@ namespace ExamCards.Exam
         public string Beat { get; set; } = string.Empty;
 
         /// <summary>
+        /// The original question split into the scenario's facts and the ask (last), by the backend's
+        /// decomposition. Empty for a question it hasn't decomposed, and for search results.
+        /// </summary>
+        public IReadOnlyList<QuestionPart> Parts { get; set; } = Array.Empty<QuestionPart>();
+
+        /// <summary>The situation as a flow chart ending in the question's decision; empty without a decomposition.</summary>
+        public DecisionFlow Flow { get; set; } = DecisionFlow.Empty;
+
+        /// <summary>The text of the <see cref="PartRole.Ask"/> part; null when the question has no parts.</summary>
+        public string Ask
+        {
+            get
+            {
+                for (var i = Parts.Count - 1; i >= 0; i--)
+                {
+                    if (Parts[i].Role == PartRole.Ask)
+                        return Parts[i].Text;
+                }
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// The entities and icons of the question: the backend sends the same ones with both texts, so the
+        /// original's, or the simplified version's for questions extracted before originals had them.
+        /// </summary>
+        public PromptEntities Entities =>
+            Original?.Entities is { IsEmpty: false } original ? original
+            : Simplified?.Entities ?? Original?.Entities ?? PromptEntities.Empty;
+
+        /// <summary>
         /// What to show for the original text: the <see cref="Stem"/> when the question has a chapter (its intro
         /// stands for the scenario paragraph), otherwise the whole text.
         /// </summary>

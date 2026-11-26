@@ -52,8 +52,20 @@ namespace ExamCards.Exam.Tests
             ""is_correct"": false,
             ""correct_index"": 1,
             ""original"": { ""explanation"": ""Because."", ""feedbacks"": [""fa"", ""fb"", ""fc"", ""fd""] },
-            ""has_simplified"": true,
-            ""simplified"": { ""explanation"": ""Simply."", ""feedbacks"": [""sa"", ""sb"", ""sc"", ""sd""] }
+            ""resolution"": {
+                ""answer_requirements"": [ "" Works offline "", """" ],
+                ""flow"": { ""primary"": ""process_flow"", ""secondary"": [], ""reason"": """", ""trigger"": """",
+                    ""nodes"": [
+                        { ""id"": ""n1"", ""type"": ""start"", ""label"": ""Start"", ""entity_ids"": [], ""condition_id"": """", ""source_status"": ""explicit"", ""is_question"": false, ""added"": false },
+                        { ""id"": ""n2"", ""type"": ""process"", ""label"": ""Cache it"", ""entity_ids"": [""e1""], ""condition_id"": """", ""source_status"": ""inferred"", ""is_question"": false, ""added"": true }
+                    ],
+                    ""edges"": [ { ""source"": ""n1"", ""target"": ""n2"", ""type"": ""next"", ""label"": """", ""source_status"": ""inferred"", ""added"": true } ] },
+                ""options"": [
+                    { ""index"": 0, ""verdict"": ""incorrect"", ""supported_requirements"": [], ""gaps"": [""Works offline""], ""reason"": "" Needs a network. "" },
+                    { ""index"": 1, ""verdict"": ""correct"", ""supported_requirements"": [""Works offline""], ""gaps"": [], ""reason"": ""Caches."" }
+                ],
+                ""rule"": "" Cache what must work offline. ""
+            }
         }";
 
         static GameRoundDto ParseRound() => JsonUtility.FromJson<GameRoundDto>(RoundJson);
@@ -164,14 +176,142 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void ToReview_MapsBothVersions()
+        public void ToReview_MapsTheReview()
         {
             var review = GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0);
 
             Assert.AreEqual(1, review.CorrectIndex);
             Assert.AreEqual("Because.", review.Original.Explanation);
             CollectionAssert.AreEqual(new[] { "fa", "fb", "fc", "fd" }, review.Original.Feedbacks);
-            Assert.AreEqual("Simply.", review.Simplified.Explanation);
+        }
+
+        [Test]
+        public void ToReview_MapsTheResolution_Trimmed()
+        {
+            var resolution = GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0).Resolution;
+
+            Assert.AreEqual("Cache what must work offline.", resolution.Rule);
+            CollectionAssert.AreEqual(new[] { "Works offline" }, resolution.AnswerRequirements);
+            Assert.IsFalse(resolution.ForAnswer(0).IsCorrect);
+            Assert.AreEqual("Needs a network.", resolution.ForAnswer(0).Reason);
+            CollectionAssert.AreEqual(new[] { "Works offline" }, resolution.ForAnswer(0).Gaps);
+            Assert.IsTrue(resolution.ForAnswer(1).IsCorrect);
+            Assert.IsNull(resolution.ForAnswer(2));
+
+            var flow = resolution.Flow;
+            Assert.AreEqual("process_flow", flow.Primary);
+            CollectionAssert.AreEqual(new[] { FlowNodeType.Start, FlowNodeType.Process }, flow.Nodes.Select(n => n.Type));
+            Assert.IsTrue(flow.Nodes[1].Added);
+            Assert.AreEqual(FlowStatus.Inferred, flow.Nodes[1].Status);
+            CollectionAssert.AreEqual(new[] { "e1" }, flow.Nodes[1].EntityRefs);
+            Assert.AreEqual("n2", flow.Edges.Single().Target);
+        }
+
+        [Test]
+        public void ToReview_ResolutionMissingOrEmpty_IsEmpty()
+        {
+            var missing = ParseAnswer();
+            missing.resolution = null;
+            Assert.IsTrue(GameQuestionMapper.ToReview(missing, "q1", 0).Resolution.IsEmpty);
+
+            // What the backend sends for a question it hasn't resolved.
+            var empty = JsonUtility.FromJson<GameAnswerResultDto>(AnswerJson);
+            empty.resolution = JsonUtility.FromJson<GameResolutionDto>(
+                @"{ ""answer_requirements"": [], ""flow"": { ""nodes"": [], ""edges"": [] }, ""options"": [], ""rule"": """" }");
+            Assert.IsTrue(GameQuestionMapper.ToReview(empty, "q1", 0).Resolution.IsEmpty);
+        }
+
+        [Test]
+        public void ToReview_ResolutionOptions_DropBadOnes_AndAllWhenAVerdictContradictsTheKey()
+        {
+            var result = ParseAnswer();
+            result.resolution.options = new[]
+            {
+                new OptionEvaluationDto { index = 0, verdict = "incorrect", reason = "kept" },
+                new OptionEvaluationDto { index = 0, verdict = "incorrect", reason = "repeated" },
+                new OptionEvaluationDto { index = -1, verdict = "incorrect" },
+                new OptionEvaluationDto { index = 2, verdict = "maybe" },
+                null,
+            };
+            var options = GameQuestionMapper.ToReview(result, "q1", 0).Resolution.Options;
+            Assert.AreEqual("kept", options.Single().Reason);
+
+            // Answer 0 is wrong (correct_index 1), so a "correct" verdict for it contradicts the key.
+            result.resolution.options = new[]
+            {
+                new OptionEvaluationDto { index = 1, verdict = "correct" },
+                new OptionEvaluationDto { index = 0, verdict = "correct" },
+            };
+            var review = GameQuestionMapper.ToReview(result, "q1", 0);
+            Assert.IsEmpty(review.Resolution.Options);
+            Assert.AreEqual("Cache what must work offline.", review.Resolution.Rule);
+        }
+
+        [Test]
+        public void Parts_MapFromTheOriginal_DroppingUnknownRolesAndBlankText()
+        {
+            var round = ParseRound();
+            round.items[0].parts = new[]
+            {
+                new GamePartDto { role = "context", text = " A team ships an app. ", entity_ids = new[] { "e1", " " } },
+                new GamePartDto { role = "mood", text = "Unknown role" },
+                new GamePartDto { role = "problem", text = "  " },
+                null,
+                new GamePartDto { role = "ask", text = "What now?" },
+            };
+            round.simplified[0].parts = new[] { new GamePartDto { role = "context", text = "Ignored" } };
+
+            var question = GameQuestionMapper.BuildQuestions(round)[0];
+
+            CollectionAssert.AreEqual(new[] { PartRole.Context, PartRole.Ask }, question.Parts.Select(p => p.Role));
+            Assert.AreEqual("A team ships an app.", question.Parts[0].Text);
+            CollectionAssert.AreEqual(new[] { "e1" }, question.Parts[0].EntityRefs);
+            Assert.AreEqual("What now?", question.Ask);
+        }
+
+        [Test]
+        public void PartsAndFlow_Missing_AreEmpty()
+        {
+            var question = GameQuestionMapper.BuildQuestions(ParseRound())[1];
+
+            Assert.IsEmpty(question.Parts);
+            Assert.IsNull(question.Ask);
+            Assert.IsTrue(question.Flow.IsEmpty);
+        }
+
+        [Test]
+        public void Flow_DropsUnknownNodesAndDanglingEdges_AndFallsBackToTheSimplifiedOne()
+        {
+            var round = ParseRound();
+            round.items[0].flow = new GameFlowDto
+            {
+                nodes = new[]
+                {
+                    new FlowNodeDto { id = "a", type = "start", label = "Go", source_status = "explicit" },
+                    new FlowNodeDto { id = "b", type = "blob" },
+                    new FlowNodeDto { id = "a", type = "end" },
+                    new FlowNodeDto { id = "q", type = "decision", is_question = true, source_status = "weird" },
+                },
+                edges = new[]
+                {
+                    new FlowEdgeDto { source = "a", target = "q", type = "yes", label = "ok" },
+                    new FlowEdgeDto { source = "a", target = "b", type = "next" },
+                    new FlowEdgeDto { source = "q", target = "a", type = "sideways" },
+                },
+            };
+
+            var flow = GameQuestionMapper.BuildQuestions(round)[0].Flow;
+
+            CollectionAssert.AreEqual(new[] { "a", "q" }, flow.Nodes.Select(n => n.Id));
+            Assert.AreEqual(FlowNodeType.Start, flow.Nodes[0].Type);
+            Assert.IsTrue(flow.Nodes[1].IsQuestion);
+            Assert.AreEqual(FlowStatus.Unknown, flow.Nodes[1].Status);
+            Assert.AreEqual(FlowEdgeType.Yes, flow.Edges.Single().Type);
+
+            // Only the rephrase has a flow: it is the same question's, so it is used.
+            round = ParseRound();
+            round.simplified[0].flow = new GameFlowDto { nodes = new[] { new FlowNodeDto { id = "s", type = "start" } } };
+            Assert.AreEqual("s", GameQuestionMapper.BuildQuestions(round)[0].Flow.Nodes.Single().Id);
         }
 
         [Test]
@@ -256,15 +396,6 @@ namespace ExamCards.Exam.Tests
             right.is_correct = true;
             right.misconception = "Should not be shown.";
             Assert.IsEmpty(GameQuestionMapper.ToReview(right, "q1", 1).Misconception);
-        }
-
-        [Test]
-        public void ToReview_WithoutSimplified_HasNoSimplifiedReview()
-        {
-            var result = ParseAnswer();
-            result.has_simplified = false;
-
-            Assert.IsNull(GameQuestionMapper.ToReview(result, "q1", 0).Simplified);
         }
 
         [Test]

@@ -127,13 +127,10 @@ namespace ExamCards.Exam
         public QuestionPrompt CurrentPrompt => IsCurrentRevealed ? Current.Simplified : Current.Original;
 
         /// <summary>
-        /// Feedback and explanation for <see cref="CurrentPrompt"/>; null until answered. Falls back to the
-        /// original's review if the simplified one is missing.
+        /// Feedback and explanation for <see cref="CurrentPrompt"/>; null until answered. Both texts share the
+        /// original's review, since their answers are index-aligned.
         /// </summary>
-        public PromptReview CurrentPromptReview =>
-            CurrentReview == null ? null
-            : IsCurrentRevealed && CurrentReview.Simplified != null ? CurrentReview.Simplified
-            : CurrentReview.Original;
+        public PromptReview CurrentPromptReview => CurrentReview?.Original;
 
         /// <summary>
         /// Answers the current question. If the request fails, nothing changes and the player can answer again.

@@ -87,30 +87,51 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void Entities_ComeWithTheSimplifiedText()
+        public void Entities_ComeWithBothTexts()
         {
             var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
             var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
 
             foreach (var question in new[] { round[0], added })
             {
-                var entities = question.Simplified.Entities;
-                CollectionAssert.AreEqual(new[] { "API Key", "Send Request" }, entities.Question.Select(e => e.Name));
-                CollectionAssert.AreEqual(new[] { EntityKind.Object, EntityKind.Action }, entities.Question.Select(e => e.Kind));
-                CollectionAssert.AreEqual(new[] { "key" }, entities.Question[0].Aliases);
-                Assert.AreEqual(3, entities.Answers.Count);
-                Assert.AreEqual("x-api-key", entities.ForAnswer(1).Single().Name);
-                Assert.AreEqual(0, entities.ForAnswer(2).Count);
-                Assert.IsTrue(question.Original.Entities.IsEmpty);
+                foreach (var entities in new[] { question.Original.Entities, question.Simplified.Entities, question.Entities })
+                {
+                    CollectionAssert.AreEqual(new[] { "API Key", "Send Request" }, entities.Question.Select(e => e.Name));
+                    CollectionAssert.AreEqual(new[] { EntityKind.Object, EntityKind.Action }, entities.Question.Select(e => e.Kind));
+                    CollectionAssert.AreEqual(new[] { "key" }, entities.Question[0].Aliases);
+                    // The decomposition id that parts and flow nodes name (JSON key "ref").
+                    CollectionAssert.AreEqual(new[] { "e1", "" }, entities.Question.Select(e => e.Ref));
+                    Assert.AreEqual(3, entities.Answers.Count);
+                    Assert.AreEqual("x-api-key", entities.ForAnswer(1).Single().Name);
+                    Assert.AreEqual(0, entities.ForAnswer(2).Count);
 
-                // Icons: null where the backend has none (or no longer has the stored key).
-                Assert.AreEqual("credential", entities.QuestionIcon);
-                CollectionAssert.AreEqual(new[] { "credential", "send" }, entities.Question.Select(e => e.Icon));
-                CollectionAssert.AreEqual(new[] { "permission", null, "tags" }, entities.AnswerIcons);
-                Assert.IsNull(entities.ForAnswer(0).Single().Icon);
-                Assert.IsNull(entities.ForAnswer(1).Single().Icon);
+                    // Icons: null where the backend has none (or no longer has the stored key).
+                    Assert.AreEqual("credential", entities.QuestionIcon);
+                    CollectionAssert.AreEqual(new[] { "credential", "send" }, entities.Question.Select(e => e.Icon));
+                    CollectionAssert.AreEqual(new[] { "permission", null, "tags" }, entities.AnswerIcons);
+                    Assert.IsNull(entities.ForAnswer(0).Single().Icon);
+                    Assert.IsNull(entities.ForAnswer(1).Single().Icon);
+                }
             }
-            Assert.IsTrue(round[1].Original.Entities.IsEmpty);
+            Assert.IsTrue(round[1].Entities.IsEmpty);
+        }
+
+        [Test]
+        public void Parts_ComeWithTheOriginal_AndFlowsAreEmptyWithoutOne()
+        {
+            var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
+            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+
+            foreach (var question in new[] { round[0], added })
+            {
+                CollectionAssert.AreEqual(new[] { PartRole.Context, PartRole.Ask }, question.Parts.Select(p => p.Role));
+                Assert.AreEqual("A support agent calls the API.", question.Parts[0].Text);
+                CollectionAssert.AreEqual(new[] { "e1" }, question.Parts[0].EntityRefs);
+                Assert.AreEqual("Which header carries the API key?", question.Ask);
+                Assert.IsTrue(question.Flow.IsEmpty);
+            }
+            Assert.IsEmpty(round[1].Parts);
+            Assert.IsTrue(round[1].Flow.IsEmpty);
         }
 
         [Test]
@@ -121,11 +142,13 @@ namespace ExamCards.Exam.Tests
             var review = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1);
             QuestionValidator.ValidateReview(questions[0], review);
             Assert.AreEqual(1, review.CorrectIndex);
-            Assert.AreEqual("Simply put: x-api-key.", review.Simplified.Explanation);
+            Assert.IsFalse(string.IsNullOrEmpty(review.Original.Explanation));
+            // The fixture question has no flow, so the backend sends no resolution either.
+            Assert.IsTrue(review.Resolution.IsEmpty);
 
             var plain = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0);
             QuestionValidator.ValidateReview(questions[1], plain);
-            Assert.IsNull(plain.Simplified);
+            Assert.IsTrue(plain.Resolution.IsEmpty);
         }
 
         [Test]

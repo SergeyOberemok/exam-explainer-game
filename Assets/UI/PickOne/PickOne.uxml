@@ -67,27 +67,55 @@
                         <ui:VisualElement class="hero-icon question__icon">
                             <ui:VisualElement name="questionIcon" class="hero-icon__image" picking-mode="Ignore" />
                         </ui:VisualElement>
-                        <ui:VisualElement class="chip chip--mint chip--raised">
+                        <ui:VisualElement class="chip chip--mint chip--raised meta-chip--shrink">
                             <ui:Label name="categoryLabel" text="SECTION" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
                         <ui:VisualElement name="chapterChip" class="chip chip--gold chip--raised chapter-chip is-hidden">
                             <ui:Label name="chapterLabel" text="CHAPTER" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
+                        <ui:VisualElement name="difficultyChip" class="chip chip--peach-2 chip--raised is-hidden">
+                            <ui:Label name="difficultyLabel" enable-rich-text="false" class="chip__text" />
+                        </ui:VisualElement>
+                        <ui:VisualElement name="objectiveChip" class="chip chip--sand chip--raised is-hidden">
+                            <ui:Label name="objectiveLabel" enable-rich-text="false" class="chip__text" />
+                        </ui:VisualElement>
                         <ui:VisualElement name="simplifiedBadge" class="chip chip--sand chip--raised is-hidden">
                             <ui:Label text="SIMPLIFIED" class="chip__text" />
                         </ui:VisualElement>
-                        <ui:VisualElement name="devIdChip" class="chip chip--sand chip--raised dev-id-chip is-hidden">
+                        <ui:VisualElement name="devIdChip" class="chip chip--sand chip--raised dev-id-chip meta-chip--shrink is-hidden">
                             <ui:Label name="devIdLabel" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
                         <ui:Label name="statusText" enable-rich-text="false" class="status-text is-hidden" />
+                        <ui:VisualElement name="panelTabs" class="panel-tabs is-hidden">
+                            <ui:VisualElement name="debriefTab" class="chip chip--raised panel-tab">
+                                <ui:Label text="DEBRIEF" class="chip__text" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="questionTab" class="chip chip--raised panel-tab">
+                                <ui:Label text="QUESTION [Q]" class="chip__text" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
                     </ui:VisualElement>
                     <ui:ScrollView name="questionScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="question__scroll">
                         <ui:Label name="storyBeat" enable-rich-text="false" class="story-beat is-hidden" />
                         <ui:Label name="questionText" text="Loading question…" enable-rich-text="false" class="question__text" />
+                        <ui:VisualElement name="questionParts" class="question-parts is-hidden" />
                         <ui:VisualElement name="explanationSection" class="explanation is-hidden">
                             <ui:Label name="storyOutcome" enable-rich-text="false" class="story-outcome is-hidden" />
+                            <ui:Label name="resolutionRule" enable-rich-text="false" class="resolution-rule is-hidden" />
+                            <ui:VisualElement name="misconceptionSection" class="debrief-block is-hidden">
+                                <ui:Label text="Why it was tempting" class="explanation__title" />
+                                <ui:Label name="misconceptionText" enable-rich-text="false" class="misconception" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="requirementsSection" class="debrief-block is-hidden">
+                                <ui:Label name="requirementsTitle" text="What the answer had to do" class="explanation__title" />
+                                <ui:VisualElement name="requirementsList" class="requirements" />
+                            </ui:VisualElement>
                             <ui:Label text="Explanation" class="explanation__title" />
                             <ui:Label name="explanationText" text="Explanation" enable-rich-text="false" class="explanation__text" />
+                            <ui:VisualElement name="answerNotesSection" class="debrief-block is-hidden">
+                                <ui:Label text="Every answer" class="explanation__title" />
+                                <ui:VisualElement name="answerNotes" class="answer-notes" />
+                            </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:ScrollView>
                     <ui:VisualElement name="questionEntities" class="entity-strip entity-strip--bottom is-hidden" />

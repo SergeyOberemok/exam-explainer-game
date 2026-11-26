@@ -80,7 +80,7 @@ namespace ExamCards.Exam.Tests
             // No latency: awaiting a delay would need the main thread this test is blocking.
             var round = new MockQuestionService(latencyMs: 0).StartRoundAsync().GetAwaiter().GetResult();
             var used = round.Questions
-                .Select(question => question.Simplified.Entities)
+                .Select(question => question.Entities)
                 .SelectMany(entities => entities.Question.Concat(entities.Answers.SelectMany(answer => answer)).Select(entity => entity.Icon)
                     .Append(entities.QuestionIcon)
                     .Concat(entities.AnswerIcons))

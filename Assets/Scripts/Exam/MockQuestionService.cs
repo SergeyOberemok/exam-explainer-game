@@ -40,8 +40,14 @@ namespace ExamCards.Exam
             return BuildCatalog()
                 .Select(keyed => keyed.Question)
                 .Where(q => Matches(q.Original.Question) || Matches(q.Section) || q.Original.Answers.Any(Matches))
-                // Like the backend's search results: no simplified text until the question is added.
-                .Select(q => new Question { Id = q.Id, Section = q.Section, Source = q.Source, Original = q.Original })
+                // Like the backend's search results: no simplified text, entities or parts until the question is added.
+                .Select(q => new Question
+                {
+                    Id = q.Id,
+                    Section = q.Section,
+                    Source = q.Source,
+                    Original = new QuestionPrompt { Question = q.Original.Question, Answers = q.Original.Answers },
+                })
                 .ToList();
         }
 
@@ -111,8 +117,15 @@ namespace ExamCards.Exam
         /// <summary>The chapter every sample question of the round belongs to.</summary>
         public const string SampleScenario = "sample-service";
 
-        static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified) =>
-            new KeyedQuestion
+        /// <summary>
+        /// The original's feedback and explanation are the only review, as on the backend; the simplified version
+        /// has no review of its own. Both texts get the same entities.
+        /// </summary>
+        static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified)
+        {
+            var entities = simplified.Entities ?? PromptEntities.Empty;
+            Decompositions.TryGetValue(id, out var decomposition);
+            return new KeyedQuestion
             {
                 Question = new Question
                 {
@@ -124,16 +137,98 @@ namespace ExamCards.Exam
                     Scenario = SampleScenario,
                     Stage = Story[id].Stage,
                     Beat = Story[id].Beat,
-                    Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers },
-                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers, Entities = simplified.Entities ?? PromptEntities.Empty },
+                    Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers, Entities = entities },
+                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers, Entities = entities },
+                    Parts = decomposition.Parts ?? Array.Empty<QuestionPart>(),
+                    Flow = decomposition.Flow ?? DecisionFlow.Empty,
                 },
                 Review = new AnswerReview
                 {
                     CorrectIndex = correctIndex,
                     Outcome = "The sample service moves on.",
                     Original = new PromptReview { Explanation = original.Explanation, Feedbacks = original.Feedbacks },
-                    Simplified = new PromptReview { Explanation = simplified.Explanation, Feedbacks = simplified.Feedbacks },
+                    Resolution = decomposition.Resolution ?? Resolution.Empty,
                 },
+            };
+        }
+
+        static QuestionPart Part(PartRole role, string text) => new QuestionPart { Role = role, Text = text };
+
+        static FlowNode Node(string id, FlowNodeType type, string label, bool isQuestion = false, bool added = false) =>
+            new FlowNode { Id = id, Type = type, Label = label, Status = FlowStatus.Explicit, IsQuestion = isQuestion, Added = added };
+
+        static FlowEdge Edge(string source, string target, bool added = false) =>
+            new FlowEdge { Source = source, Target = target, Type = FlowEdgeType.Next, Status = FlowStatus.Explicit, Added = added };
+
+        static OptionEvaluation Option(int index, bool correct, string reason, params string[] gaps) =>
+            new OptionEvaluation { Index = index, IsCorrect = correct, Reason = reason, Gaps = gaps };
+
+        static OptionEvaluation Meets(OptionEvaluation option, params string[] requirements)
+        {
+            option.SupportedRequirements = requirements;
+            return option;
+        }
+
+        const string Q1Failure = "Reports an authentication failure";
+        const string Q1LogIn = "Tells the client to log in again";
+        const string Q1Resource = "Keeps the resource's existence accurate";
+
+        /// <summary>What the backend's decomposition and resolution would add, for two of the sample questions.</summary>
+        static readonly Dictionary<string, (QuestionPart[] Parts, DecisionFlow Flow, Resolution Resolution)> Decompositions =
+            new Dictionary<string, (QuestionPart[] Parts, DecisionFlow Flow, Resolution Resolution)>
+            {
+                ["q1"] = (
+                    new[]
+                    {
+                        Part(PartRole.Context, "A public website sends users to a login page whenever their session has expired."),
+                        Part(PartRole.Problem, "A request arrives carrying a session token that has already expired."),
+                        Part(PartRole.Goal, "The client should know that logging in again will fix it."),
+                        Part(PartRole.Ask, "Which HTTP status code should the API return for a request that carries an expired session token?"),
+                    },
+                    new DecisionFlow
+                    {
+                        Primary = "decision_flow",
+                        Trigger = "A request with an expired token",
+                        Nodes = new[]
+                        {
+                            Node("n1", FlowNodeType.Start, "Request arrives"),
+                            Node("n2", FlowNodeType.Process, "Check the session token"),
+                            Node("n3", FlowNodeType.Decision, "Which status code?", isQuestion: true),
+                        },
+                        Edges = new[] { Edge("n1", "n2"), Edge("n2", "n3") },
+                    },
+                    new Resolution
+                    {
+                        AnswerRequirements = new[] { Q1Failure, Q1LogIn, Q1Resource },
+                        Options = new[]
+                        {
+                            Meets(Option(0, false, "400 blames the request's format, but the request is well formed.", "Doesn't report an authentication failure"), Q1Resource),
+                            Meets(Option(1, true, "401 says valid credentials are needed, which is exactly what logging in again provides."), Q1Failure, Q1LogIn, Q1Resource),
+                            Meets(Option(2, false, "403 says the identity is known and refused, so logging in again would not help.", "Doesn't tell the client to log in again"), Q1Failure, Q1Resource),
+                            Option(3, false, "404 says the resource is missing, which sends the client looking in the wrong place.", "Doesn't report an authentication failure", "Misleads the client about the resource"),
+                        },
+                        Rule = "Missing or expired credentials are 401; known but not allowed is 403.",
+                    }),
+                ["q3"] = (
+                    new[]
+                    {
+                        Part(PartRole.Context, "A developer works on a branch the whole team pushes to."),
+                        Part(PartRole.CurrentState, "A commit that is already pushed introduced a bug."),
+                        Part(PartRole.Constraint, "Teammates may already have pulled the commit."),
+                        Part(PartRole.Ask, "What is the safest way to undo that commit?"),
+                    },
+                    DecisionFlow.Empty,
+                    new Resolution
+                    {
+                        Options = new[]
+                        {
+                            Option(0, true, "A revert adds a commit that undoes the change, so nobody's history is rewritten."),
+                            Option(1, false, "A hard reset and force-push rewrite history that teammates already have.", "Keeps shared history intact"),
+                            Option(2, false, "Recreating the branch is disruptive and loses work that isn't in that copy.", "Keeps everyone's work"),
+                            Option(3, false, "Edits that are never committed never reach the branch.", "Actually changes the shared branch"),
+                        },
+                        Rule = "On a shared branch, undo with a new commit instead of rewriting history.",
+                    }),
             };
 
         /// <summary>Every question search can find: the round's, and some that only search reaches.</summary>
@@ -159,14 +254,6 @@ namespace ExamCards.Exam
                 {
                     Question = "A web page can't call an API on another domain. What controls whether the browser allows it?",
                     Answers = new[] { "DNS", "Certificate pinning", "Keep-alive", "CORS" },
-                    Feedbacks = new[]
-                    {
-                        "Wrong. DNS only finds the server.",
-                        "Wrong. That's about trusting certificates.",
-                        "Wrong. That's about reusing connections.",
-                        "Right. The server's CORS headers tell the browser what's allowed.",
-                    },
-                    Explanation = "CORS headers from the server tell the browser which other sites may call it.",
                     Entities = Entities(new[] { Thing("Web Page", "page"), Thing("Browser"), Thing("API"), Step("Call API") },
                         new[] { Thing("DNS") }, new[] { Thing("Certificate") }, new[] { Thing("Connection") }, new[] { Thing("CORS", "CORS headers") }),
                 });
@@ -188,14 +275,6 @@ namespace ExamCards.Exam
                 {
                     Question = "Two transfers to one account at the same time leave a wrong balance. What prevents this?",
                     Answers = new[] { "Transactions", "More memory", "Read replicas", "Compression" },
-                    Feedbacks = new[]
-                    {
-                        "Right. They keep concurrent writes from overwriting each other.",
-                        "Wrong. Memory doesn't coordinate writes.",
-                        "Wrong. Writes still go to one place.",
-                        "Wrong. That only saves space.",
-                    },
-                    Explanation = "Transactions make concurrent changes safe.",
                     Entities = Entities(new[] { Step("Transfer", "transfers"), Thing("Account"), Thing("Balance") },
                         new[] { Thing("Transaction", "transactions") }, new[] { Thing("Memory") }, new[] { Thing("Read Replica", "read replicas") }, new[] { Thing("Compression") }),
                 });
@@ -223,14 +302,6 @@ namespace ExamCards.Exam
                     {
                         Question = "A user's login session has expired. Which status code should the API return?",
                         Answers = new[] { "400: the request is malformed", "401: the user must log in", "403: the user isn't allowed", "404: the page doesn't exist" },
-                        Feedbacks = new[]
-                        {
-                            "Wrong. The request is well formed.",
-                            "Right. 401 tells the client to log in again.",
-                            "Wrong. Logging in again wouldn't fix a 403.",
-                            "Wrong. The resource still exists.",
-                        },
-                        Explanation = "An expired login is an authentication failure, and 401 is the code for that.",
                         Entities = Entities(new[] { Actor("User", "user's"), Thing("Session", "login session"), Thing("API"), Step("Return Status Code") },
                             new[] { Thing("Request") }, new[] { Step("Log In") }, new[] { Thing("Permission") }, new[] { Thing("Page") }),
                     }),
@@ -252,14 +323,6 @@ namespace ExamCards.Exam
                     {
                         Question = "A query that finds orders by customer has become slow. What helps most?",
                         Answers = new[] { "More database connections", "Returning more columns", "An index on the customer column", "Running the query twice" },
-                        Feedbacks = new[]
-                        {
-                            "Wrong. This doesn't make a single query faster.",
-                            "Wrong. This makes the query slower.",
-                            "Right. The database can jump straight to the matching rows.",
-                            "Wrong. This only adds work.",
-                        },
-                        Explanation = "An index lets the database skip scanning the whole table.",
                         Entities = Entities(new[] { Thing("Query"), Thing("Order", "orders"), Actor("Customer") },
                             new[] { Thing("Database Connection", "database connections") }, new[] { Thing("Column", "columns") }, new[] { Thing("Index") }, new[] { Step("Run Query") }),
                     }),
@@ -281,14 +344,6 @@ namespace ExamCards.Exam
                     {
                         Question = "You pushed a bad commit to a shared branch. What is the safest way to undo it?",
                         Answers = new[] { "git revert, then push", "git reset --hard, then force-push", "Delete and recreate the branch", "Fix the files but don't commit" },
-                        Feedbacks = new[]
-                        {
-                            "Right. It undoes the change and keeps history.",
-                            "Wrong. It can erase teammates' work.",
-                            "Wrong. It's disruptive and can lose work.",
-                            "Wrong. The fix never reaches the branch.",
-                        },
-                        Explanation = "git revert undoes a commit by adding a new one, so nobody's history breaks.",
                         Entities = Entities(new[] { Thing("Commit", "bad commit"), Thing("Branch", "shared branch"), Step("Undo Commit") },
                             new[] { Thing("git revert"), Step("Push") }, new[] { Thing("git reset --hard"), Step("Force-Push") }, new[] { Thing("Branch") }, new[] { Thing("File", "files") }),
                     }),

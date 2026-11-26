@@ -37,8 +37,6 @@ namespace ExamCards.Exam
                 throw new FormatException($"Question {question.Id}: invalid recorded answer {answered}.");
 
             ValidatePromptReview(question.Id, review.Original, count);
-            if (review.Simplified != null)
-                ValidatePromptReview(question.Id, review.Simplified, count);
         }
 
         /// <exception cref="FormatException">The indices aren't distinct answers, would remove every answer, or the

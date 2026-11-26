@@ -17,6 +17,9 @@
             <ui:ScrollView name="cardScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="card__scroll">
                 <ui:Label name="answerText" text="Answer" enable-rich-text="false" class="card__answer" />
                 <ui:Label name="feedbackText" text="Feedback" enable-rich-text="false" class="card__feedback is-hidden" />
+                <ui:Label name="reasonText" enable-rich-text="false" class="card__reason is-hidden" />
+                <ui:Label name="metText" enable-rich-text="false" class="card__met is-hidden" />
+                <ui:Label name="gapsText" enable-rich-text="false" class="card__gaps is-hidden" />
             </ui:ScrollView>
             <ui:VisualElement name="cardEntities" class="card__entities is-hidden" />
             <ui:VisualElement class="select-wrap brutal brutal--s3">

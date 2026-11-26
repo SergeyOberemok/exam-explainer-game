@@ -33,6 +33,9 @@ namespace ExamCards.UI
         readonly Label _letterBadge;
         readonly Label _answerText;
         readonly Label _feedbackText;
+        readonly Label _reasonText;
+        readonly Label _metText;
+        readonly Label _gapsText;
         readonly ScrollView _scroll;
         readonly Label _selectLabel;
         readonly VisualElement _icon;
@@ -48,6 +51,9 @@ namespace ExamCards.UI
             _letterBadge = root.Q<Label>("letterBadge");
             _answerText = root.Q<Label>("answerText");
             _feedbackText = root.Q<Label>("feedbackText");
+            _reasonText = root.Q<Label>("reasonText");
+            _metText = root.Q<Label>("metText");
+            _gapsText = root.Q<Label>("gapsText");
             _scroll = root.Q<ScrollView>("cardScroll");
             _selectLabel = root.Q<Label>("selectLabel");
             _icon = root.Q("cardIcon");
@@ -64,6 +70,9 @@ namespace ExamCards.UI
         public VisualElement Root { get; }
         public int Index { get; }
 
+        AnswerCardState _state;
+        bool _hasEvaluation;
+
         /// <summary>Sets the text only, so a reveal can swap it without changing the card's state.</summary>
         public void Bind(string answerText, string feedbackText)
         {
@@ -78,6 +87,24 @@ namespace ExamCards.UI
         /// <summary>Shows the answer's entity icons; null or empty hides them. Doesn't touch the card's state.</summary>
         public void BindEntities(IReadOnlyList<VisualEntity> entities) => _entities.Bind(entities);
 
+        /// <summary>
+        /// Shows, once answered, why the answer is right or wrong, how many of the question's requirements it
+        /// meets and what it misses. With an evaluation these take the source feedback's place on the card (the
+        /// debrief lists that feedback); null keeps the feedback. Doesn't touch the card's state.
+        /// </summary>
+        /// <param name="met">Requirements the answer meets.</param>
+        /// <param name="total">Requirements of the question; 0 hides the count.</param>
+        public void BindResolution(OptionEvaluation option, int met, int total)
+        {
+            _hasEvaluation = option != null;
+            _reasonText.text = option?.Reason ?? string.Empty;
+            _metText.text = option == null || total == 0 ? string.Empty : $"Meets {met} of {total} requirements";
+            _gapsText.text = option == null || option.IsCorrect || option.Gaps.Count == 0
+                ? string.Empty
+                : "Missing: " + string.Join("; ", option.Gaps);
+            UpdateReviewVisibility();
+        }
+
         public void SetState(AnswerCardState state)
         {
             _card.EnableInClassList(InteractiveClass, state == AnswerCardState.Interactive);
@@ -85,8 +112,8 @@ namespace ExamCards.UI
             _card.EnableInClassList(WrongClass, state == AnswerCardState.Wrong);
             _card.EnableInClassList(DimmedClass, state == AnswerCardState.Dimmed);
             _card.EnableInClassList(EliminatedClass, state == AnswerCardState.Eliminated);
-            _feedbackText.EnableInClassList(HiddenClass,
-                state == AnswerCardState.Interactive || state == AnswerCardState.Eliminated);
+            _state = state;
+            UpdateReviewVisibility();
 
             _selectLabel.text = state switch
             {
@@ -96,6 +123,19 @@ namespace ExamCards.UI
                 AnswerCardState.Dimmed => "Not Selected",
                 _ => $"Select Card [{Index + 1}]",
             };
+        }
+
+        /// <summary>
+        /// Feedback (without an evaluation), reason, count and gaps show only once the question is answered, and
+        /// only when they have text.
+        /// </summary>
+        void UpdateReviewVisibility()
+        {
+            var answered = _state != AnswerCardState.Interactive && _state != AnswerCardState.Eliminated;
+            _feedbackText.EnableInClassList(HiddenClass, !answered || _hasEvaluation || string.IsNullOrEmpty(_feedbackText.text));
+            _reasonText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_reasonText.text));
+            _metText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_metText.text));
+            _gapsText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_gapsText.text));
         }
     }
 }

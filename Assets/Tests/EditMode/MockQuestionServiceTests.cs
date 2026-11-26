@@ -27,7 +27,46 @@ namespace ExamCards.Exam.Tests
                 var review = round.SubmitAnswerAsync(question.Id, 0).GetAwaiter().GetResult();
                 Assert.That(review.CorrectIndex, Is.InRange(0, 3), question.Id);
                 Assert.IsFalse(string.IsNullOrWhiteSpace(review.Original.Explanation), question.Id);
-                Assert.IsFalse(string.IsNullOrWhiteSpace(review.Simplified.Explanation), question.Id);
+                // Like the backend: both texts carry the same entities.
+                Assert.AreSame(question.Original.Entities, question.Simplified.Entities, question.Id);
+            }
+        }
+
+        [Test]
+        public void SomeQuestions_HavePartsAndAResolutionThatAgreesWithTheKey()
+        {
+            var round = new MockQuestionService(latencyMs: 0).StartRoundAsync().GetAwaiter().GetResult();
+            var decomposed = round.Questions.Where(q => q.Parts.Count > 0).ToList();
+
+            Assert.GreaterOrEqual(decomposed.Count, 2);
+            foreach (var question in decomposed)
+            {
+                Assert.AreEqual(PartRole.Ask, question.Parts.Last().Role, question.Id);
+                Assert.IsNotNull(question.Ask, question.Id);
+
+                var review = round.SubmitAnswerAsync(question.Id, 0).GetAwaiter().GetResult();
+                Assert.IsNotEmpty(review.Resolution.Rule, question.Id);
+                for (var i = 0; i < question.Original.Answers.Count; i++)
+                    Assert.AreEqual(i == review.CorrectIndex, review.Resolution.ForAnswer(i).IsCorrect, $"{question.Id} answer {i}");
+            }
+        }
+
+        [Test]
+        public void Requirements_TheCorrectAnswerMeetsAll_AndAWrongOneOnlySome()
+        {
+            var round = new MockQuestionService(latencyMs: 0).StartRoundAsync().GetAwaiter().GetResult();
+            var withRequirements = round.Questions
+                .Select(q => (q.Id, Review: round.SubmitAnswerAsync(q.Id, 0).GetAwaiter().GetResult()))
+                .Where(r => r.Review.Resolution.AnswerRequirements.Count > 0)
+                .ToList();
+
+            Assert.IsNotEmpty(withRequirements);
+            foreach (var (id, review) in withRequirements)
+            {
+                var resolution = review.Resolution;
+                var total = resolution.AnswerRequirements.Count;
+                Assert.AreEqual(total, resolution.MetCount(review.CorrectIndex), id);
+                Assert.IsTrue(Enumerable.Range(0, 4).Any(i => i != review.CorrectIndex && resolution.MetCount(i) > 0 && resolution.MetCount(i) < total), id);
             }
         }
 
