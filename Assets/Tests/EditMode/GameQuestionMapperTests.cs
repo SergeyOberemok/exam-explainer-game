@@ -72,8 +72,8 @@ namespace ExamCards.Exam.Tests
             ""answer_requirements"": [ "" Works offline "", """" ],
             ""resolution_flow"": { ""primary"": ""process_flow"", ""secondary"": [], ""reason"": """", ""trigger"": """",
                 ""nodes"": [
-                    { ""id"": ""n1"", ""type"": ""start"", ""label"": ""Start"", ""entity_ids"": [], ""condition_id"": """", ""source_status"": ""explicit"", ""is_question"": false, ""added"": false },
-                    { ""id"": ""n2"", ""type"": ""process"", ""label"": ""Cache it"", ""entity_ids"": [""e1""], ""condition_id"": """", ""source_status"": ""inferred"", ""is_question"": false, ""added"": true }
+                    { ""id"": ""n1"", ""type"": ""start"", ""label"": ""Start"", ""entity_ids"": [], ""icon"": ""workflow"", ""condition_id"": """", ""source_status"": ""explicit"", ""is_question"": false, ""added"": false },
+                    { ""id"": ""n2"", ""type"": ""process"", ""label"": ""Cache it"", ""entity_ids"": [""e1""], ""icon"": ""Not A Key"", ""condition_id"": """", ""source_status"": ""inferred"", ""is_question"": false, ""added"": true }
                 ],
                 ""edges"": [ { ""source"": ""n1"", ""target"": ""n2"", ""type"": ""next"", ""label"": """", ""source_status"": ""inferred"", ""added"": true } ] }
         }";
@@ -81,6 +81,15 @@ namespace ExamCards.Exam.Tests
         static GameCardRoundDto ParseRound() => JsonUtility.FromJson<GameCardRoundDto>(RoundJson);
         static GameCardAnswerResultDto ParseAnswer() => JsonUtility.FromJson<GameCardAnswerResultDto>(AnswerJson);
         static Question First() => GameQuestionMapper.BuildQuestions(ParseRound())[0];
+
+        [Test]
+        public void ToReview_KeepsANodesIconKey_AndDropsOneThatIsntAKey()
+        {
+            var flow = GameQuestionMapper.ToReview(ParseAnswer(), "q1", 0).Resolution.Flow;
+
+            Assert.AreEqual("workflow", flow.Nodes[0].Icon);
+            Assert.IsNull(flow.Nodes[1].Icon);
+        }
 
         [Test]
         public void BuildQuestions_MapsParsedJson_InPlayOrder_WithToolsByIndex()

@@ -222,6 +222,7 @@ namespace ExamCards.Exam.Api
                     Type = type,
                     Label = node.label?.Trim() ?? string.Empty,
                     EntityRefs = refs == null ? CleanList(node.entity_ids) : KnownRefs(node.entity_ids, refs),
+                    Icon = EntityIconResolver.CleanKey(node.icon),
                     ConditionId = node.condition_id?.Trim() ?? string.Empty,
                     Status = ToStatus(node.source_status),
                     IsQuestion = node.is_question,

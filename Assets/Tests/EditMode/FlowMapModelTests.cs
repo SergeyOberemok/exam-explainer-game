@@ -61,6 +61,18 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void ForQuestion_PassesTheNodesIconKeyOn()
+        {
+            var question = MakeQuestion();
+            question.Flow.Nodes[0].Icon = "workflow";
+
+            var nodes = FlowMapModel.ForQuestion(question).Nodes;
+
+            Assert.AreEqual("workflow", nodes.First(node => node.Id == "n1").Icon);
+            Assert.IsNull(nodes.First(node => node.Id == "n4").Icon);
+        }
+
+        [Test]
         public void ForQuestion_HangsAnAnswerBoxPerToolOffTheDecision()
         {
             var model = FlowMapModel.ForQuestion(MakeQuestion(), index => index == 0);

@@ -160,6 +160,7 @@ namespace ExamCards.Exam.Api
         public string type;
         public string label;
         public string[] entity_ids;
+        public string icon;
         public string condition_id;
         public string source_status;
         public bool is_question;

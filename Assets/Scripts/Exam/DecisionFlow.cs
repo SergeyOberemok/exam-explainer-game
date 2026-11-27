@@ -43,6 +43,9 @@ namespace ExamCards.Exam
         /// <summary>The <see cref="CastMember.Ref"/>s of the cast members the node shows.</summary>
         public IReadOnlyList<string> EntityRefs { get; set; } = Array.Empty<string>();
 
+        /// <summary>The backend's icon key for the step; null when it sent none (the map then draws a glyph for the node's type).</summary>
+        public string Icon { get; set; }
+
         public string ConditionId { get; set; } = string.Empty;
         public FlowStatus Status { get; set; }
 

@@ -121,6 +121,18 @@ namespace ExamCards.Exam
                 ? CastFor(Tools[index].ComponentRefs).Where(member => !member.InScene).ToArray()
                 : Array.Empty<CastMember>();
 
+        /// <returns>
+        /// Every cast member answer <paramref name="index"/> is made of, those the scene doesn't name first
+        /// (they are what sets the answer apart), then the scene's; empty for an index without a tool.
+        /// </returns>
+        public IReadOnlyList<CastMember> ToolComponents(int index)
+        {
+            if (index < 0 || index >= Tools.Count)
+                return Array.Empty<CastMember>();
+            var members = CastFor(Tools[index].ComponentRefs);
+            return members.Where(member => !member.InScene).Concat(members.Where(member => member.InScene)).ToArray();
+        }
+
         /// <returns>The icon key of answer <paramref name="index"/>; null when it has none.</returns>
         public string IconForAnswer(int index) => index >= 0 && index < Tools.Count ? Tools[index].Icon : null;
     }

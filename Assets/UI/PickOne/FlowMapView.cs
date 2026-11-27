@@ -268,7 +268,9 @@ namespace ExamCards.UI
             head.AddToClassList("flow-node__head");
             var glyph = new VisualElement { pickingMode = PickingMode.Ignore };
             glyph.AddToClassList("flow-node__glyph");
-            EntityIcons.Show(glyph, node.IsAnswer ? node.Icon : TypeIcon(node.Type));
+            // The backend's pick when the game ships it; else the answer's default or the node type's glyph.
+            var iconKey = node.Icon != null && EntityIcons.Load(node.Icon) != null ? node.Icon : null;
+            EntityIcons.Show(glyph, iconKey ?? (node.IsAnswer ? null : TypeIcon(node.Type)));
             head.Add(glyph);
             head.Add(MakeLabel(Tag(node), "flow-node__tag"));
             box.Add(head);
@@ -325,8 +327,7 @@ namespace ExamCards.UI
         };
 
         /// <summary>
-        /// A glyph for what kind of step a node is. A node has no icon key of its own yet; its cast shows what
-        /// it is about.
+        /// The glyph for what kind of step a node is, for a node the backend sent no (shipped) icon key for.
         /// </summary>
         static string TypeIcon(FlowNodeType type) => type switch
         {

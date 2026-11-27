@@ -95,6 +95,16 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void ToolComponents_PutsTheAnswersOwnMembersFirst_AndDropsUnknownRefs()
+        {
+            var question = MakeQuestion();
+
+            CollectionAssert.AreEqual(new[] { "e7", "e1" }, question.ToolComponents(0).Select(m => m.Ref));
+            CollectionAssert.AreEqual(new[] { "e1" }, question.ToolComponents(1).Select(m => m.Ref));
+            Assert.IsEmpty(question.ToolComponents(2));
+        }
+
+        [Test]
         public void CastFor_KeepsTheOrder_AndDropsRepeatsAndUnknownRefs()
         {
             var question = MakeQuestion();

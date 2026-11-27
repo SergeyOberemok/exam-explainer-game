@@ -606,7 +606,8 @@ namespace ExamCards.UI
             RenderDebrief(answered ? _session.CurrentReview : null);
 
             // The large icons say what the question and each answer are about; the chips show the cast. The
-            // question's strip has the scene's members, so a card adds only those its answer alone names.
+            // question's strip has the scene's members; a card shows everything its answer is made of, the
+            // members only it names first.
             EntityIcons.Show(_questionIcon, question.Icon);
             _questionEntities.Bind(question.SceneCast);
 
@@ -616,7 +617,7 @@ namespace ExamCards.UI
             {
                 _cards[i].Bind(question.Answers[i], review?.Feedbacks[i]);
                 _cards[i].BindIcon(question.IconForAnswer(i));
-                _cards[i].BindEntities(question.ToolCast(i));
+                _cards[i].BindEntities(question.ToolComponents(i));
                 _cards[i].BindResolution(resolution?.ForAnswer(i), resolution?.MetCount(i) ?? 0, requirementCount);
                 _cards[i].SetState(GetCardState(i), FlipDelayMs(i));
             }

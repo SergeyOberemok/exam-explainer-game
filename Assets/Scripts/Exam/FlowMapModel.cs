@@ -44,7 +44,7 @@ namespace ExamCards.Exam
         /// <summary>The answer's index for an answer box; null for a node of the flow.</summary>
         public int? AnswerIndex { get; set; }
 
-        /// <summary>An answer box's icon key (null when it has none); a node of the flow has none.</summary>
+        /// <summary>The icon key of an answer box or of a node of the flow; null when the backend sent none.</summary>
         public string Icon { get; set; }
 
         /// <summary>An answer removed by 50/50.</summary>
@@ -153,6 +153,7 @@ namespace ExamCards.Exam
                 Id = node.Id,
                 Label = node.Label ?? string.Empty,
                 Type = node.Type,
+                Icon = node.Icon,
                 IsQuestion = node.IsQuestion,
                 Added = node.Added,
                 Inferred = node.Status == FlowStatus.Inferred,
