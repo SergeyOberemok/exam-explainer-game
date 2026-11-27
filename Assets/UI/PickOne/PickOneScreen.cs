@@ -19,7 +19,8 @@ namespace ExamCards.UI
     /// Answers and 50/50 are checked by the round,
     /// so they run asynchronously; a failed request leaves the question as it was and shows a message.
     /// The search modal (header button or /) finds questions by text; choosing one adds it to the round and
-    /// plays it right away.
+    /// plays it right away. The map modal (MAP chip or M) draws the question's flow with its answers, and after
+    /// answering the resolution's flow (←/→ switch).
     /// </summary>
     [RequireComponent(typeof(UIDocument))]
     public sealed class PickOneScreen : MonoBehaviour
@@ -75,6 +76,12 @@ namespace ExamCards.UI
         IReadOnlyList<Question> _searchResults = Array.Empty<Question>();
         SearchPanelView _search;
         VisualElement _searchButton;
+
+        FlowMapView _map;
+        VisualElement _mapButton;
+
+        /// <summary>Which map the modal shows; set when it opens and by its tabs.</summary>
+        FlowMapKind _mapKind;
 
         Label _categoryLabel;
         VisualElement _chapterChip;
@@ -200,6 +207,11 @@ namespace ExamCards.UI
             _search.TextChanged += OnSearchTextChanged;
             _search.Chosen += OnSearchResultChosen;
             _search.CloseRequested += CloseSearch;
+            _mapButton = root.Q("mapButton");
+            _mapButton.RegisterCallback<ClickEvent>(OnMapClicked);
+            _map = new FlowMapView(root);
+            _map.CloseRequested += CloseMap;
+            _map.KindRequested += ShowMapKind;
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _nextButton.clicked += OnNextPressed;
             _retryButton.clicked += LoadRound;
@@ -235,6 +247,14 @@ namespace ExamCards.UI
                 _search.Dispose();
                 _search = null;
             }
+            _mapButton?.UnregisterCallback<ClickEvent>(OnMapClicked);
+            if (_map != null)
+            {
+                _map.CloseRequested -= CloseMap;
+                _map.KindRequested -= ShowMapKind;
+                _map.Dispose();
+                _map = null;
+            }
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             if (_nextButton != null)
                 _nextButton.clicked -= OnNextPressed;
@@ -255,6 +275,19 @@ namespace ExamCards.UI
             if (_search.IsOpen)
             {
                 HandleSearchKeys(keyboard);
+                return;
+            }
+
+            // The map's keys come next, so M or Esc closes it before any shortcut of the question.
+            if (_map.IsOpen)
+            {
+                HandleMapKeys(keyboard);
+                return;
+            }
+
+            if (keyboard[Key.M].wasPressedThisFrame && CanOpenMap)
+            {
+                OpenMap();
                 return;
             }
 
@@ -336,6 +369,9 @@ namespace ExamCards.UI
             _session = null;
             _loadFailed = false;
             CloseSearch();
+            CloseMap();
+            _map.Reset();
+            _mapButton.AddToClassList(HiddenClass);
             _searchResults = Array.Empty<Question>();
             _search.Reset(SearchHintText);
             _resultsOverlay.AddToClassList(ResultsHiddenClass);
@@ -428,6 +464,7 @@ namespace ExamCards.UI
             _progressLabel.text = $"Question {_session.CurrentIndex + 1} of {_session.Total}";
 
             ShowStatus(null);
+            CloseMap();
             _showScenario = false;
             _showQuestionAfterAnswer = false;
             EnsureCardCount(question.Answers.Count);
@@ -588,6 +625,11 @@ namespace ExamCards.UI
 
             _nextButton.text = _session.IsLastQuestion ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
+
+            _mapButton.EnableInClassList(HiddenClass, !HasMap(FlowMapKind.Question) && !HasMap(FlowMapKind.Resolution));
+            // An answer or a 50/50 that lands while the map is open shows in it.
+            if (_map.IsOpen)
+                RefreshMap();
 
             // Back to the top for a new question, the debrief or the other text; not for a 50/50 or a busy state.
             var view = $"{_session.CurrentIndex}|{question.Id}|{debrief}|{_showScenario}";
@@ -958,8 +1000,94 @@ namespace ExamCards.UI
             ShowCurrentQuestion();
         }
 
+        // ---------- map ----------
+
+        /// <summary>A question is on screen and has a map to show; not over the results.</summary>
+        bool CanOpenMap =>
+            _session is { IsFinished: false, Current: not null }
+            && (HasMap(FlowMapKind.Question) || HasMap(FlowMapKind.Resolution));
+
+        /// <summary>The resolution's map is part of the key, so it only exists once the question is answered.</summary>
+        bool HasMap(FlowMapKind kind)
+        {
+            var question = _session?.Current;
+            if (question == null)
+                return false;
+            if (kind == FlowMapKind.Question)
+                return !question.Flow.IsEmpty;
+            return _session.IsCurrentAnswered && _session.CurrentReview?.Resolution?.Flow.IsEmpty == false;
+        }
+
+        void OnMapClicked(ClickEvent evt)
+        {
+            if (CanOpenMap)
+                OpenMap();
+        }
+
+        /// <summary>Opens on the resolution once there is one, otherwise on the question's map.</summary>
+        void OpenMap()
+        {
+            // The map stands in for the question, so it shows the question whole.
+            if (_typing.IsPlaying)
+                _typing.Complete();
+            _mapKind = HasMap(FlowMapKind.Resolution) ? FlowMapKind.Resolution : FlowMapKind.Question;
+            _map.Open();
+            RefreshMap();
+        }
+
+        void CloseMap() => _map?.Close();
+
+        void ShowMapKind(FlowMapKind kind)
+        {
+            if (!_map.IsOpen || !HasMap(kind))
+                return;
+            _mapKind = kind;
+            RefreshMap();
+        }
+
+        void HandleMapKeys(Keyboard keyboard)
+        {
+            if (keyboard[Key.Escape].wasPressedThisFrame || keyboard[Key.M].wasPressedThisFrame)
+                CloseMap();
+            else if (keyboard[Key.LeftArrow].wasPressedThisFrame)
+                ShowMapKind(FlowMapKind.Question);
+            else if (keyboard[Key.RightArrow].wasPressedThisFrame)
+                ShowMapKind(FlowMapKind.Resolution);
+        }
+
+        /// <summary>Binds the map the modal should show; the view keeps its layout while the key is the same.</summary>
+        void RefreshMap()
+        {
+            var question = _session?.Current;
+            if (question == null)
+            {
+                CloseMap();
+                return;
+            }
+            if (!HasMap(_mapKind))
+                _mapKind = HasMap(FlowMapKind.Resolution) ? FlowMapKind.Resolution : FlowMapKind.Question;
+
+            FlowMapModel model;
+            string key;
+            if (_mapKind == FlowMapKind.Resolution)
+            {
+                model = FlowMapModel.ForResolution(question, _session.CurrentReview);
+                key = $"{question.Id}|resolution";
+            }
+            else
+            {
+                model = FlowMapModel.ForQuestion(question, _session.IsEliminated);
+                // A 50/50 dims answers, so it is part of what the map shows.
+                var eliminated = string.Concat(Enumerable.Range(0, question.Tools.Count).Select(i => _session.IsEliminated(i) ? '1' : '0'));
+                key = $"{question.Id}|question|{eliminated}";
+            }
+            _map.SetTabs(HasMap(FlowMapKind.Resolution) && HasMap(FlowMapKind.Question), _mapKind);
+            _map.Bind(model, key);
+        }
+
         void ShowResults()
         {
+            CloseMap();
             var outOfLives = _session.Lives <= 0;
             // Out of answered questions: a round that keeps loading batches has no fixed total.
             _resultsScore.text = $"{(outOfLives ? "Out of lives! " : "")}You scored {_session.Score} / {_session.AnsweredCount}";

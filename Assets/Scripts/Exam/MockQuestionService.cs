@@ -74,11 +74,20 @@ namespace ExamCards.Exam
                 Gaps = gaps ?? Array.Empty<string>(),
             };
 
-        static FlowNode Node(string id, FlowNodeType type, string label, bool isQuestion = false, bool added = false) =>
-            new FlowNode { Id = id, Type = type, Label = label, Status = FlowStatus.Explicit, IsQuestion = isQuestion, Added = added };
+        static FlowNode Node(string id, FlowNodeType type, string label, bool isQuestion = false, bool added = false,
+            string[] refs = null) =>
+            new FlowNode
+            {
+                Id = id, Type = type, Label = label, Status = FlowStatus.Explicit, IsQuestion = isQuestion, Added = added,
+                EntityRefs = refs ?? Array.Empty<string>(),
+            };
 
-        static FlowEdge Edge(string source, string target, bool added = false) =>
-            new FlowEdge { Source = source, Target = target, Type = FlowEdgeType.Next, Status = FlowStatus.Explicit, Added = added };
+        static FlowEdge Edge(string source, string target, bool added = false, string label = "", bool inferred = false) =>
+            new FlowEdge
+            {
+                Source = source, Target = target, Type = FlowEdgeType.Next, Added = added, Label = label,
+                Status = inferred ? FlowStatus.Inferred : FlowStatus.Explicit,
+            };
 
         sealed class Sample
         {
@@ -194,11 +203,17 @@ namespace ExamCards.Exam
                         Trigger = "A request with an expired token",
                         Nodes = new[]
                         {
-                            Node("n1", FlowNodeType.Start, "Request arrives"),
-                            Node("n2", FlowNodeType.Process, "Check the session token"),
-                            Node("n3", FlowNodeType.Decision, "Which status code?", isQuestion: true),
+                            Node("n1", FlowNodeType.Start, "Request arrives", refs: new[] { "e4" }),
+                            Node("n2", FlowNodeType.Process, "Check the session token", refs: new[] { "e2", "e3" }),
+                            Node("n3", FlowNodeType.Input, "The user expects the login page when the session is over", refs: new[] { "e1" }),
+                            Node("n4", FlowNodeType.Output, "The token has expired", refs: new[] { "e3" }),
+                            Node("n5", FlowNodeType.Decision, "Which status code?", isQuestion: true, refs: new[] { "e2", "e3" }),
                         },
-                        Edges = new[] { Edge("n1", "n2"), Edge("n2", "n3") },
+                        Edges = new[]
+                        {
+                            Edge("n1", "n2"), Edge("n1", "n3", label: "a person is waiting", inferred: true), Edge("n2", "n4"),
+                            Edge("n4", "n5"), Edge("n3", "n5", label: "what the client must do"),
+                        },
                     },
                     Correct = 1,
                     Feedbacks = new[]
@@ -229,6 +244,25 @@ namespace ExamCards.Exam
                             gaps: new[] { "Doesn't report an authentication failure", "Misleads the client about the resource" }),
                     },
                     Rule = "Missing or expired credentials are 401; known but not allowed is 403.",
+                    // The backend reuses the decision's id for the step that replaces it, as here (n5).
+                    ResolutionFlow = new DecisionFlow
+                    {
+                        Primary = "process_flow",
+                        Trigger = "A request with an expired token",
+                        Nodes = new[]
+                        {
+                            Node("n1", FlowNodeType.Start, "Request arrives", refs: new[] { "e4" }),
+                            Node("n2", FlowNodeType.Process, "Check the session token", refs: new[] { "e2", "e3" }),
+                            Node("n4", FlowNodeType.Output, "The token has expired", refs: new[] { "e3" }),
+                            Node("n5", FlowNodeType.Process, "Answer 401 Unauthorized", added: true, refs: new[] { "e2", "e5" }),
+                            Node("n6", FlowNodeType.End, "The client sends the user to log in again", added: true, refs: new[] { "e1", "e5" }),
+                        },
+                        Edges = new[]
+                        {
+                            Edge("n1", "n2"), Edge("n2", "n4"), Edge("n4", "n5", added: true, label: "authentication failed"),
+                            Edge("n5", "n6", added: true),
+                        },
+                    },
                 }),
                 Make(new Sample
                 {

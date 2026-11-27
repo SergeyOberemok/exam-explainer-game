@@ -38,7 +38,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - `Question.Objectives` holds the keys (main one first, empty when untagged), and `Question.Difficulty` is 1–3 (0 when untagged).
     - Each answer's outcome carries a misconception: one sentence on what picking it suggests the player got wrong (empty for the correct answer). Like the rest of the key, it only arrives after answering.
     - The mapper drops anything that isn't a key instead of failing a round.
-    - The screen shows a difficulty chip (`QuestionLabels.Difficulty`). Only after answering does it show the main objective (`QuestionLabels.Objective`; the key shown as text, since a key can name the answer) and, in the debrief, the misconception of the answer that counts. The rest is data for the planned map and mastery tracking.
+    - The screen shows a difficulty chip (`QuestionLabels.Difficulty`). Only after answering does it show the main objective (`QuestionLabels.Objective`; the key shown as text, since a key can name the answer) and, in the debrief, the misconception of the answer that counts. The rest is data for mastery tracking.
     - `GET /v2/game/objectives` (catalog with playable counts) and the `objective` filter of `POST /v2/game/rounds` exist on the backend, but the game doesn't call them yet.
   - **Story:** the backend frames the bank as one story (`../exam-explainer-api/src/claude_exam/api/scenario_catalog.py`): one company, a chapter per exam scenario, the same stages in each.
     - `Question.Scenario` and `Question.Stage` are the chapter and stage keys. `Question.Beat` is one line to show before the question. `Question.Stem` is the original text without the scenario paragraph the source repeats in every question of a chapter. All are empty when the backend has none.
@@ -51,7 +51,20 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - An `AnswerOutcome` has `IsCorrect`, `Impact` (Success/Partial/Failure), `Consequence`, `Misconception`, `Reason`, `Gaps` and `SupportedRequirements`. `ForAnswer(i)` is null when it is missing. A one-line `Rule` comes with them.
     - The backend names supported requirements by their text, so `RequirementsMetBy(i)` / `MetCount(i)` match them by trimmed text and ignore any that isn't one.
     - `HasRequirementMatches` is false when no answer names any (documents composed before the backend sent them), and the screen then hides the counts.
-    - Nothing draws the flows yet; they are the data for the planned map.
+    - Node ids are only unique within one flow: a resolution can drop the decision and give its id to a new step, so its steps are told apart by `Added`, never by comparing ids with the question's flow.
+  - **Map** (`FlowMapModel.cs`, `FlowLayout.cs`): what the map modal draws. The game draws these structured flows itself; it doesn't use the decomposition's `mermaid` strings (those aren't in the game payload, and Unity can't render mermaid).
+    - `FlowMapModel.ForQuestion(question, isEliminated)` is the flow plus an answer box per tool (its `Label` and icon) hanging off the `IsQuestion` node by a dashed edge, with 50/50 answers dimmed. It shows only `InScene` cast members on the nodes, so the map can't give the answer away.
+    - `ForResolution(question, review)` is `Resolution.Flow` with every cast member, `Added` steps highlighted and the `Rule` as the caption.
+    - `MapEdge.Style` is `Added`, `Inferred` (`FlowStatus.Inferred`), `Answer` or `Normal`. An edge without a label shows its branch type (yes/no/approved/rejected).
+    - `FlowLayout.Compute(nodes, links, size)` lays out top to bottom (like mermaid's `flowchart TD`):
+      - ranks by longest path, ignoring the links that close a cycle;
+      - gives a link that skips ranks a lane in each rank it passes;
+      - orders each rank by barycenter sweeps;
+      - centres each node under its parents and each root over its children. Neighbours that would overlap move as a block centred on what they want, so the answers fan out under the decision;
+      - routes a link that closes a cycle upwards: from its source's top through the rank gaps and a column right of every node it passes, into its target's bottom.
+
+      It returns a rect per node, a point path per link (an empty one for a link it can't draw), and a label centre per labelled link (`FlowLink.LabelSize`). A label goes in the gap below its source, never in a lane beside other nodes; a link going up gets its label in its column, made wide enough for it. It is plain C# with its own `FlowPoint`/`FlowRect`, tested in `FlowLayoutTests` on the headless-sessions question's map.
+    - A node has no icon key of its own yet. The box shows a glyph for its `FlowNodeType` and its cast's icons, since the "first ref" isn't reliably what a node is about. A per-node `icon` / `action_ref` from the backend would be the next step.
   - `IQuestionSearch.SearchAsync(text)` finds playable questions as whole cards, without the key. `QuestionSearchText.Normalize` collapses whitespace and line breaks, trims, and allows 2 to 2000 chars, so a whole pasted question fits. The API and mock services implement it.
   - `IQuestionService.StartRoundAsync()` starts a round (throws `NoQuestionsException` when nothing is playable). `QuestionServices.Create()` picks the service: `Factory` if set (the API assembly sets it), otherwise `MockQuestionService`, which EditMode tests use. A round can't be replayed, so Play Again starts a new one.
   - `LocalExamRound` is an `IExamRound` over `KeyedQuestion`s with the same rules as the backend; the mock and the tests use it.
@@ -95,7 +108,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
 - **UI — `Assets/UI/PickOne/`** (lives in Assembly-CSharp):
   - `PickOne.uxml` is the whole screen. `AnswerCard.uxml` is the per-answer card template, instantiated from code into `cardsRow`.
   - `PickOne.uss` holds all styles. The palette lives as `:root` variables.
-  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) starts a round and handles input: card picks (click or keys 1–4), 50/50 (click or F), Q (debrief/question tab), and Next, Play Again and Retry (click, Enter or Space). At the end it shows the results overlay.
+  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) starts a round and handles input: card picks (click or keys 1–4), 50/50 (click or F), Q (debrief/question tab), M (map), and Next, Play Again and Retry (click, Enter or Space). At the end it shows the results overlay.
     - It creates the question service inside the load, so a bad setting ends in the failure message too.
     - A failed or empty load (including `NoQuestionsException`) shows a message and the Retry button. In a player build a missing service factory is logged as an error instead of quietly serving mock questions.
     - Next on the last loaded question loads the round's next batch (`LoadMoreAndAdvance`, status "Loading more questions…"; Next retries a failure). The results show the score out of answered questions.
@@ -126,6 +139,12 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - Its `max-length` (8000) is above `MaxTextLength` on purpose, so whitespace is collapsed before `Normalize` cuts the text.
     - `PickOneScreen` runs the search (cancelled by the next one, by closing and on disable) and plays the chosen result via `ExamSession.PlayNowAsync(id)`. A failure keeps the modal open with a message.
     - While the modal is open, `Update` hands keys to it (Esc, ↑/↓, Enter) and the question shortcuts are off.
+  - **Map modal** (`mapOverlay`, `FlowMapView`): the `mapButton` chip (MAP [M], next to the panel tabs in `meta-actions`) opens it while the current question has a flow.
+    - Before answering it shows the question's map. After answering it opens on the resolution, and the QUESTION / RESOLUTION tabs (or ←/→) switch between them.
+    - While it is open, `Update` hands it the keys (Esc or M close it, ←/→ switch) before any other shortcut, and the question's typing is finished.
+    - It closes on a new question, a new round and the results. An answer or a 50/50 that lands while it is open rebinds it (`RefreshMap`). The view keeps its layout while the bind key (question, map, eliminated answers) is the same; a new round calls `FlowMapView.Reset`, since a question there can have the same id and a different map.
+    - Laying out takes two passes. `Bind` builds the boxes (`.flow-node`, absolute, fixed width) and edge labels hidden under `map__canvas--measuring`. Once the modal is open and every box and label has a size, it runs `FlowMapModel.Layout`, then sets the boxes' and labels' `left`/`top`, the canvas size and its centring margin. A hidden element gets no layout, so the second pass waits for the modal to open. It polls every 16 ms, at most 30 times; after that, anything still unsized takes a stand-in size so the map still shows.
+    - `FlowEdgeLayer` (first child of the canvas) draws the edges with Painter2D: vertical beziers through the layout's points, an arrowhead at the target, added edges thicker and green, inferred and answer edges muted, answer edges dashed (`SetDashPattern`, reset per path). Its colours are the USS custom properties `--flow-edge-*` on `.flow-edges`. Edge labels are absolute `Label`s centred on the layout's label points.
   - **Outcomes on the cards:** once answered, a card with an `AnswerOutcome` shows `outcomeSection` instead of the source feedback (the debrief lists that), via `AnswerCardView.BindResolution`:
     - an impact chip (WORKS / PARTLY WORKS / FAILS, `card__impact--success|partial|failure`)
     - the `Consequence` and the `Reason`
@@ -150,7 +169,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
 - USS has no `box-shadow`, `gap`, or gradients. The neo-brutal hard shadows are done two ways:
   - **1–2 px offsets:** thicker right/bottom borders.
   - **3–4 px offsets:** a `.brutal.brutal--s3|s4` wrapper whose first child is an absolute `.brutal__shadow`, translated under the real `.box`.
-- `name` attributes are camelCase; classes are BEM-style kebab-case. Avoid inline `style` in UXML; the only inline styles set from C# are data-driven values (progress width, an entity's icon).
+- `name` attributes are camelCase; classes are BEM-style kebab-case. Avoid inline `style` in UXML; the only inline styles set from C# are data-driven values (progress width, an entity's icon, a map box's or edge label's position and the map canvas's size and margin).
 - Labels showing exam data set `enable-rich-text="false"`, because the text can contain literal tags such as `<example>`.
 - Buttons are `focusable="false"`, so Enter and Space only act through `PickOneScreen`'s key handling and don't also trigger a focused button.
 - SVG icons in `Icons/` import as `VectorImage` and are referenced from USS via `url("project://database/...")`.

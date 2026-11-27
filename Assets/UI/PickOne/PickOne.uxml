@@ -83,12 +83,17 @@
                             <ui:Label name="devIdLabel" enable-rich-text="false" class="chip__text" />
                         </ui:VisualElement>
                         <ui:Label name="statusText" enable-rich-text="false" class="status-text is-hidden" />
-                        <ui:VisualElement name="panelTabs" class="panel-tabs is-hidden">
-                            <ui:VisualElement name="debriefTab" class="chip chip--raised panel-tab">
-                                <ui:Label text="DEBRIEF" class="chip__text" picking-mode="Ignore" />
+                        <ui:VisualElement class="meta-actions">
+                            <ui:VisualElement name="panelTabs" class="panel-tabs is-hidden">
+                                <ui:VisualElement name="debriefTab" class="chip chip--raised panel-tab">
+                                    <ui:Label text="DEBRIEF" class="chip__text" picking-mode="Ignore" />
+                                </ui:VisualElement>
+                                <ui:VisualElement name="questionTab" class="chip chip--raised panel-tab">
+                                    <ui:Label text="QUESTION [Q]" class="chip__text" picking-mode="Ignore" />
+                                </ui:VisualElement>
                             </ui:VisualElement>
-                            <ui:VisualElement name="questionTab" class="chip chip--raised panel-tab">
-                                <ui:Label text="QUESTION [Q]" class="chip__text" picking-mode="Ignore" />
+                            <ui:VisualElement name="mapButton" class="chip chip--raised panel-tab map-chip is-hidden">
+                                <ui:Label text="MAP [M]" class="chip__text" picking-mode="Ignore" />
                             </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:VisualElement>
@@ -177,6 +182,35 @@
                         <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
                         <ui:Button name="playAgainButton" text="Play Again [Enter]" focusable="false" class="primary-button" />
                     </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="mapOverlay" class="map map--hidden">
+            <ui:VisualElement class="map__wrap brutal brutal--s4">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:VisualElement class="box map__panel">
+                    <ec:GradientElement class="map__strip" start-color="#FFDEAD" mid-color="#A83223" end-color="#FFDEAD" picking-mode="Ignore" />
+                    <ui:VisualElement class="map__header">
+                        <ui:Label text="Map" class="map__title" />
+                        <ui:VisualElement name="mapTabs" class="map__tabs is-hidden">
+                            <ui:VisualElement name="mapQuestionTab" class="chip chip--raised map__tab">
+                                <ui:Label text="[←] QUESTION" class="chip__text" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                            <ui:VisualElement name="mapResolutionTab" class="chip chip--raised map__tab">
+                                <ui:Label text="RESOLUTION [→]" class="chip__text" picking-mode="Ignore" />
+                            </ui:VisualElement>
+                        </ui:VisualElement>
+                        <ui:VisualElement name="mapCloseButton" tooltip="Close [Esc]" class="icon-button icon-button--close">
+                            <ui:VisualElement class="icon icon--exit" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="mapCaption" enable-rich-text="false" class="map__caption is-hidden" />
+                    <ui:ScrollView name="mapScroll" mode="VerticalAndHorizontal" class="map__scroll">
+                        <ui:VisualElement name="mapCanvas" class="map__canvas" />
+                        <ui:Label name="mapEmpty" text="This question has no map yet." class="map__empty is-hidden" />
+                    </ui:ScrollView>
+                    <ui:Label name="mapHint" text="[M] or [Esc] Close" class="map__hint" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

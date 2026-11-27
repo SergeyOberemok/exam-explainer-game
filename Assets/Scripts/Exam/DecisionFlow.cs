@@ -69,7 +69,9 @@ namespace ExamCards.Exam
     /// <summary>
     /// The situation of a question as a flow chart, from the backend's decomposition: the pre-answer flow
     /// ends in the question's decision node; a <see cref="Resolution"/> continues it with the correct steps.
-    /// Nothing draws it yet; it is the data for the planned diagram.
+    /// <see cref="FlowMapModel"/> turns it into the map modal. Node ids are only unique within one flow: a
+    /// resolution can drop the decision and give its id to a new step, so tell its steps apart by
+    /// <see cref="FlowNode.Added"/>, not by comparing ids with the question's flow.
     /// </summary>
     [Serializable]
     public sealed class DecisionFlow

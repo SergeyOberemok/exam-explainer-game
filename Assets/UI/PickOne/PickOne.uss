@@ -594,29 +594,41 @@
     white-space: normal;
 }
 
-/* Debrief / question switch of an answered question, at the right of the chip row. */
-.panel-tabs {
+/* At the right of the chip row: the debrief / question switch of an answered question, and the map button. */
+.meta-actions {
     flex-direction: row;
     flex-shrink: 0;
     margin-left: auto;
 }
 
-.question__meta > .panel-tabs > .panel-tab {
+.panel-tabs {
+    flex-direction: row;
+}
+
+.meta-actions .panel-tab {
     margin-left: 6px;
     padding: 3px 11px;
     background-color: var(--cream);
 }
 
-.question__meta > .panel-tabs > .panel-tab:hover {
+.meta-actions .panel-tab:hover {
     background-color: var(--peach-2);
 }
 
-.question__meta > .panel-tabs > .panel-tab--active {
+.meta-actions .panel-tab--active {
     background-color: var(--ink);
 }
 
-.question__meta > .panel-tabs > .panel-tab--active > .chip__text {
+.meta-actions .panel-tab--active > .chip__text {
     color: var(--white);
+}
+
+.meta-actions > .map-chip {
+    background-color: var(--sand);
+}
+
+.meta-actions > .map-chip:hover {
+    background-color: var(--gold);
 }
 
 /* Why the last answer or 50/50 request failed; right-aligned in the question's chip row. */
@@ -1353,4 +1365,273 @@
     background-color: var(--page);
     font-size: 12px;
     color: var(--muted);
+}
+
+/* ---------- map overlay: the question's flow, or its resolution ---------- */
+
+.map {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    align-items: center;
+    padding: 48px 0 40px 0;
+    background-color: rgba(42, 23, 15, 0.6);
+}
+
+.map--hidden {
+    display: none;
+}
+
+/* Wide enough for four answers side by side under the question. */
+.map__wrap {
+    width: 1180px;
+    flex-grow: 1;
+    flex-shrink: 1;
+}
+
+.map__panel {
+    padding: 20px 24px 14px 24px;
+    overflow: hidden;
+}
+
+.map__strip {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    height: 4px;
+}
+
+.map__header {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.map__title {
+    font-size: 22px;
+    -unity-font-style: bold;
+    color: var(--heading);
+}
+
+.map__tabs {
+    flex-direction: row;
+    flex-grow: 1;
+    margin-left: 18px;
+}
+
+.map__tab {
+    margin-right: 6px;
+    padding: 3px 11px;
+    background-color: var(--cream);
+}
+
+.map__tab:hover {
+    background-color: var(--peach-2);
+}
+
+.map__tab--active {
+    background-color: var(--ink);
+}
+
+.map__tab--active > .chip__text {
+    color: var(--white);
+}
+
+.map__header > .icon-button--close {
+    margin-left: auto;
+}
+
+.map__caption {
+    margin-bottom: 10px;
+    font-size: 14px;
+    -unity-font-style: italic;
+    color: var(--muted);
+    white-space: normal;
+}
+
+.map__scroll {
+    flex-grow: 1;
+    border-width: 1px;
+    border-color: rgba(42, 23, 15, 0.25);
+    background-color: var(--page);
+}
+
+/* FlowMapView centres it with a left margin while it is narrower than the view; wider, it scrolls. */
+.map__canvas {
+    flex-shrink: 0;
+}
+
+/* Laid out but not shown while its boxes are measured, so they don't flash in a heap. */
+.map__canvas--measuring {
+    visibility: hidden;
+}
+
+.map__empty {
+    margin: 24px;
+    font-size: 14px;
+    color: var(--muted);
+}
+
+.map__hint {
+    margin-top: 10px;
+    font-size: 11px;
+    -unity-font-style: bold;
+    letter-spacing: 0.33px;
+    color: var(--muted);
+    -unity-text-align: middle-center;
+}
+
+/* Painter2D edges, under the boxes; FlowEdgeLayer reads the colours. */
+.flow-edges {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    --flow-edge-color: #2a170f;
+    --flow-edge-added-color: #326556;
+    --flow-edge-muted-color: rgba(88, 65, 61, 0.6);
+}
+
+.flow-edge-label {
+    position: absolute;
+    translate: -50% -50%;
+    max-width: 170px;
+    padding: 1px 6px;
+    border-width: 1px;
+    border-color: rgba(42, 23, 15, 0.25);
+    background-color: var(--page);
+    font-size: 11px;
+    color: var(--muted);
+    white-space: normal;
+    -unity-text-align: middle-center;
+}
+
+/* One box per step; FlowLayout places it. */
+.flow-node {
+    position: absolute;
+    width: 210px;
+    padding: 7px 10px 8px 10px;
+    background-color: var(--white);
+    border-width: 2px;
+    border-right-width: 3px;
+    border-bottom-width: 3px;
+    border-color: var(--ink);
+}
+
+.flow-node__head {
+    flex-direction: row;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.flow-node__glyph {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    margin-right: 5px;
+    -unity-background-image-tint-color: var(--muted);
+}
+
+.flow-node__tag {
+    font-size: 10px;
+    -unity-font-style: bold;
+    letter-spacing: 0.5px;
+    color: var(--muted);
+}
+
+.flow-node__label {
+    font-size: 13px;
+    color: var(--heading);
+    white-space: normal;
+}
+
+.flow-node__cast {
+    flex-direction: row;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.flow-node__cast > .entity--compact {
+    margin: 0 4px 0 0;
+}
+
+.flow-node--start,
+.flow-node--end {
+    border-radius: 14px;
+    background-color: var(--mint-soft);
+}
+
+.flow-node--decision {
+    background-color: var(--gold-soft);
+}
+
+/* What comes in and what comes out: a thick left edge, like mermaid's slanted boxes. */
+.flow-node--input {
+    border-left-width: 6px;
+    border-left-color: var(--latin);
+}
+
+.flow-node--output {
+    border-left-width: 6px;
+    border-left-color: var(--gold);
+}
+
+.flow-node--human-review {
+    background-color: var(--pink-soft);
+}
+
+.flow-node--inferred {
+    border-color: rgba(42, 23, 15, 0.45);
+}
+
+/* The decision the answers hang on. */
+.flow-node--question {
+    background-color: var(--sand);
+    border-color: var(--brand);
+}
+
+.flow-node--question .flow-node__tag {
+    color: var(--brand);
+}
+
+.flow-node--question .flow-node__glyph {
+    -unity-background-image-tint-color: var(--brand);
+}
+
+/* A step the resolution added: the correct mechanism. */
+.flow-node--added {
+    background-color: var(--mint);
+    border-color: var(--latin);
+}
+
+.flow-node--added .flow-node__tag {
+    color: var(--latin);
+}
+
+.flow-node--added .flow-node__glyph {
+    -unity-background-image-tint-color: var(--latin);
+}
+
+.flow-node--answer {
+    width: 160px;
+    background-color: var(--cream);
+    border-width: 1px;
+    border-right-width: 2px;
+    border-bottom-width: 2px;
+}
+
+.flow-node--answer .flow-node__glyph {
+    -unity-background-image-tint-color: var(--brand);
+}
+
+.flow-node--answer .flow-node__label {
+    font-size: 12px;
+}
+
+.flow-node--eliminated {
+    opacity: 0.35;
 }
