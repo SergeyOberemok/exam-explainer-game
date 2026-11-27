@@ -47,6 +47,12 @@ namespace ExamCards.Exam
         /// </summary>
         public IReadOnlyList<string> Objectives { get; set; } = Array.Empty<string>();
 
+        /// <summary>
+        /// What a correct answer has to achieve, sent before answering (it says nothing about which answer
+        /// does). Empty for a document composed before the backend sent them.
+        /// </summary>
+        public IReadOnlyList<string> Requirements { get; set; } = Array.Empty<string>();
+
         /// <summary>1 (easy) to 3 (hard); 0 when the backend hasn't tagged the question.</summary>
         public int Difficulty { get; set; }
 

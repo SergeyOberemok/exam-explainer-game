@@ -286,6 +286,19 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Requirements_AreTrimmed_AndBlankOnesDropped()
+        {
+            var round = ParseRound();
+            round.items[0].requirements = new[] { " Works offline ", "", null, "Keeps history" };
+            round.items[1].requirements = null;
+
+            var questions = GameQuestionMapper.BuildQuestions(round);
+
+            CollectionAssert.AreEqual(new[] { "Works offline", "Keeps history" }, questions[0].Requirements);
+            Assert.IsEmpty(questions[1].Requirements);
+        }
+
+        [Test]
         public void Objectives_KeepKeysInOrder_AndDropWhatIsNotAKey()
         {
             var round = ParseRound();

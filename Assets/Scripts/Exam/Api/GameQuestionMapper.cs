@@ -82,6 +82,7 @@ namespace ExamCards.Exam.Api
                 Text = card.question ?? string.Empty,
                 Tools = ToTools(card, refs),
                 Objectives = ToObjectives(card.objectives),
+                Requirements = CleanList(card.requirements),
                 Difficulty = card.difficulty >= 1 && card.difficulty <= 3 ? card.difficulty : 0,
                 // Like objectives, the story only describes a question: a bad key is dropped, never fatal.
                 Scenario = EntityIconResolver.CleanKey(card.scenario) ?? string.Empty,

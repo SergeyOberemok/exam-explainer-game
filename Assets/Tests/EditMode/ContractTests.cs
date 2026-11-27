@@ -47,6 +47,14 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
+        public void Card_SendsTheCriteriaBeforeAnswering()
+        {
+            var question = RoundQuestion();
+
+            Assert.IsNotEmpty(question.Requirements);
+        }
+
+        [Test]
         public void Card_HasTheStory_Objectives_AndTheStem()
         {
             var question = RoundQuestion();

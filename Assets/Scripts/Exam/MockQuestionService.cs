@@ -125,6 +125,7 @@ namespace ExamCards.Exam
                 Text = sample.Text,
                 Tools = sample.Tools,
                 Objectives = sample.Objectives,
+                Requirements = sample.Requirements ?? Array.Empty<string>(),
                 Difficulty = sample.Difficulty,
                 Scenario = SampleScenario,
                 Stage = sample.Stage,

@@ -49,6 +49,9 @@ namespace ExamCards.Exam.Api
         /// <summary>Learning-objective keys, the main one first; empty for an untagged question.</summary>
         public string[] objectives;
 
+        /// <summary>What a correct answer has to achieve; empty for an older document.</summary>
+        public string[] requirements;
+
         /// <summary>1 (easy) to 3 (hard); 0 for an untagged question.</summary>
         public int difficulty;
 

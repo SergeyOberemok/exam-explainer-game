@@ -82,6 +82,9 @@ namespace ExamCards.UI
         FlowMapView _map;
         VisualElement _mapButton;
 
+        CriteriaView _criteria;
+        VisualElement _criteriaButton;
+
         /// <summary>Which map the modal shows; set when it opens and by its tabs.</summary>
         FlowMapKind _mapKind;
 
@@ -103,7 +106,6 @@ namespace ExamCards.UI
         VisualElement _questionTab;
         VisualElement _misconceptionSection;
         Label _misconceptionText;
-        Label _requirementsTitle;
         RequirementsView _requirements;
 
         /// <summary>The player asked to see the scenario paragraph of the current question again.</summary>
@@ -171,7 +173,6 @@ namespace ExamCards.UI
             _questionTab.RegisterCallback<ClickEvent>(OnQuestionTabClicked);
             _misconceptionSection = root.Q("misconceptionSection");
             _misconceptionText = root.Q<Label>("misconceptionText");
-            _requirementsTitle = root.Q<Label>("requirementsTitle");
             _requirements = new RequirementsView(root);
             _chapterChip.RegisterCallback<ClickEvent>(OnChapterClicked);
             _devIdChip = root.Q("devIdChip");
@@ -214,6 +215,10 @@ namespace ExamCards.UI
             _map = new FlowMapView(root);
             _map.CloseRequested += CloseMap;
             _map.KindRequested += ShowMapKind;
+            _criteriaButton = root.Q("criteriaButton");
+            _criteriaButton.RegisterCallback<ClickEvent>(OnCriteriaClicked);
+            _criteria = new CriteriaView(root);
+            _criteria.CloseRequested += CloseCriteria;
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             _nextButton.clicked += OnNextPressed;
             _retryButton.clicked += LoadRound;
@@ -257,6 +262,13 @@ namespace ExamCards.UI
                 _map.Dispose();
                 _map = null;
             }
+            _criteriaButton?.UnregisterCallback<ClickEvent>(OnCriteriaClicked);
+            if (_criteria != null)
+            {
+                _criteria.CloseRequested -= CloseCriteria;
+                _criteria.Dispose();
+                _criteria = null;
+            }
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
             if (_nextButton != null)
                 _nextButton.clicked -= OnNextPressed;
@@ -287,9 +299,22 @@ namespace ExamCards.UI
                 return;
             }
 
+            if (_criteria.IsOpen)
+            {
+                if (keyboard[Key.Escape].wasPressedThisFrame || keyboard[Key.C].wasPressedThisFrame)
+                    CloseCriteria();
+                return;
+            }
+
             if (keyboard[Key.M].wasPressedThisFrame && CanOpenMap)
             {
                 OpenMap();
+                return;
+            }
+
+            if (keyboard[Key.C].wasPressedThisFrame && CanOpenCriteria)
+            {
+                OpenCriteria();
                 return;
             }
 
@@ -378,6 +403,8 @@ namespace ExamCards.UI
             CloseMap();
             _map.Reset();
             _mapButton.AddToClassList(HiddenClass);
+            CloseCriteria();
+            _criteriaButton.AddToClassList(HiddenClass);
             _searchResults = Array.Empty<Question>();
             _search.Reset(SearchHintText);
             _resultsOverlay.AddToClassList(ResultsHiddenClass);
@@ -636,6 +663,11 @@ namespace ExamCards.UI
             if (_map.IsOpen)
                 RefreshMap();
 
+            _criteriaButton.EnableInClassList(HiddenClass, !CanOpenCriteria);
+            // An answer that lands while the criteria are open ticks them; a new question closes them.
+            if (_criteria.IsOpen)
+                RefreshCriteria();
+
             // Back to the top for a new question, the debrief or the other text; not for a 50/50 or a busy state.
             var view = $"{_session.CurrentIndex}|{question.Id}|{debrief}|{_showScenario}";
             if (animateQuestion || view != _panelView)
@@ -664,8 +696,8 @@ namespace ExamCards.UI
         }
 
         /// <summary>
-        /// The debrief's lists: why the answer that counts was tempting (when wrong), what the answer had to do
-        /// with a mark for each requirement it met, and every answer's feedback. A null review clears them.
+        /// The debrief's lists: why the answer that counts was tempting (when wrong) and every answer's
+        /// feedback. The criteria live in their own modal. A null review clears them.
         /// </summary>
         void RenderDebrief(AnswerReview review)
         {
@@ -674,14 +706,6 @@ namespace ExamCards.UI
             _misconceptionText.text = misconception ?? string.Empty;
             _misconceptionSection.EnableInClassList(HiddenClass, string.IsNullOrEmpty(misconception));
 
-            var resolution = review?.Resolution;
-            var requirements = resolution?.AnswerRequirements;
-            var met = counted is int index && resolution.HasRequirementMatches ? resolution.RequirementsMetBy(index) : null;
-            var metCount = met?.Count(m => m) ?? 0;
-            _requirementsTitle.text = requirements == null || met == null || met.Count == 0
-                ? "What the answer had to do"
-                : $"What the answer had to do · yours meets {metCount} of {requirements.Count}";
-            _requirements.BindRequirements(requirements, met);
             _requirements.BindAnswerNotes(review?.Review?.Feedbacks, review?.CorrectIndex ?? -1, counted);
         }
 
@@ -1101,8 +1125,60 @@ namespace ExamCards.UI
             _map.Bind(model, key);
         }
 
+        // ---------- criteria ----------
+
+        /// <summary>What a correct answer has to achieve: sent with the question, else (an older document) with the key.</summary>
+        IReadOnlyList<string> CurrentCriteria()
+        {
+            var question = _session?.Current;
+            if (question == null)
+                return Array.Empty<string>();
+            if (question.Requirements.Count > 0)
+                return question.Requirements;
+            return _session.IsCurrentAnswered
+                ? _session.CurrentReview?.Resolution?.AnswerRequirements ?? Array.Empty<string>()
+                : Array.Empty<string>();
+        }
+
+        bool CanOpenCriteria => _session is { IsFinished: false, Current: not null } && CurrentCriteria().Count > 0;
+
+        void OnCriteriaClicked(ClickEvent evt)
+        {
+            if (CanOpenCriteria)
+                OpenCriteria();
+        }
+
+        void OpenCriteria()
+        {
+            // Like the map, it stands in for the question, so the question shows whole.
+            if (_typing.IsPlaying)
+                _typing.Complete();
+            _criteria.Open();
+            RefreshCriteria();
+        }
+
+        void CloseCriteria() => _criteria?.Close();
+
+        /// <summary>Empty boxes before answering; afterwards the ones the answer that counts meets are ticked.</summary>
+        void RefreshCriteria()
+        {
+            if (!CanOpenCriteria)
+            {
+                CloseCriteria();
+                return;
+            }
+            var resolution = _session.IsCurrentAnswered ? _session.CurrentReview?.Resolution : null;
+            IReadOnlyList<bool> met = null;
+            if (resolution != null && resolution.HasRequirementMatches && _session.AnsweredIndex is int answer)
+                met = resolution.RequirementsMetBy(answer);
+            // The ticks are matched by the key's own list, so use it when answered; the up-front list has the same texts.
+            var criteria = met != null ? resolution.AnswerRequirements : CurrentCriteria();
+            _criteria.Bind(criteria, met);
+        }
+
         void ShowResults()
         {
+            CloseCriteria();
             CloseMap();
             var outOfLives = _session.Lives <= 0;
             // Out of answered questions: a round that keeps loading batches has no fixed total.

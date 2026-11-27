@@ -12,6 +12,9 @@
         "tools-errors"
       ],
       "difficulty": 2,
+      "requirements": [
+        "No edit before review"
+      ],
       "icon": "api",
       "beat": "The first API call of the support agent is refused.",
       "question": "SCENARIO: You are building a customer support resolution agent.\n\nQUESTION: Which header carries the API key?",

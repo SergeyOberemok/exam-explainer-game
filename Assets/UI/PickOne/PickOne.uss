@@ -503,7 +503,7 @@
     border-top-width: 0;
 }
 
-/* Misconception, requirements and answer notes of the debrief. */
+/* Misconception and answer notes of the debrief; the criteria rows are shared with the criteria modal. */
 .debrief-block {
     margin-bottom: 10px;
 }
@@ -546,6 +546,11 @@
 .requirement__mark--missed {
     background-color: var(--pink);
     color: var(--pink-ink);
+}
+
+/* An unchecked box: the criteria modal before the question is answered. */
+.requirement__mark--empty {
+    background-color: var(--white);
 }
 
 .requirement__text {
@@ -629,6 +634,32 @@
 
 .meta-actions > .map-chip:hover {
     background-color: var(--gold);
+}
+
+.meta-actions > .criteria-chip {
+    background-color: var(--mint);
+}
+
+.meta-actions > .criteria-chip:hover {
+    background-color: var(--gold);
+}
+
+/* The criteria modal reuses the map overlay's frame; narrower, and its list is not a canvas. */
+.criteria .map__wrap {
+    width: 640px;
+    flex-grow: 0;
+}
+
+.criteria__list {
+    padding: 12px 14px;
+}
+
+.criteria .requirement {
+    margin-bottom: 8px;
+}
+
+.criteria .requirement__text {
+    font-size: 16px;
 }
 
 /* Why the last answer or 50/50 request failed; right-aligned in the question's chip row. */

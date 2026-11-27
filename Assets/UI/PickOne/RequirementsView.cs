@@ -4,51 +4,38 @@ using UnityEngine.UIElements;
 namespace ExamCards.UI
 {
     /// <summary>
-    /// The lists of an answered question's debrief, built in code: what the answer had to do, with a mark for
-    /// whether the answer that counts did, and every answer's feedback. Each list's section is hidden while
-    /// it has no rows.
+    /// The answer notes of an answered question's debrief, built in code (every answer's feedback), plus the
+    /// criterion row the criteria modal shares. The notes' section is hidden while it has no rows.
     /// </summary>
     public sealed class RequirementsView
     {
         const string HiddenClass = "is-hidden";
 
-        readonly VisualElement _requirementsSection;
-        readonly VisualElement _requirements;
         readonly VisualElement _notesSection;
         readonly VisualElement _notes;
 
         public RequirementsView(VisualElement root)
         {
-            _requirementsSection = root.Q("requirementsSection");
-            _requirements = root.Q("requirementsList");
             _notesSection = root.Q("answerNotesSection");
             _notes = root.Q("answerNotes");
         }
 
-        /// <param name="requirements">What an answer had to do; null or empty hides the list.</param>
-        /// <param name="met">Whether the answer that counts meets each one, aligned with <paramref name="requirements"/>; shorter counts as not met. Null shows the requirements without marks.</param>
-        public void BindRequirements(IReadOnlyList<string> requirements, IReadOnlyList<bool> met)
+        /// <summary>One criterion row for the criteria modal.</summary>
+        /// <param name="met">True ticked, false missed, null not judged yet (an empty box).</param>
+        internal static VisualElement BuildRow(string requirement, bool? met)
         {
-            _requirements.Clear();
-            for (var i = 0; requirements != null && i < requirements.Count; i++)
-            {
-                var isMet = met != null && i < met.Count && met[i];
-                var row = new VisualElement();
-                row.AddToClassList("requirement");
+            var row = new VisualElement();
+            row.AddToClassList("requirement");
 
-                // Without marks (the backend hasn't said which answer meets what) a plain bullet, never a ✗.
-                var mark = new Label(met == null ? "•" : isMet ? "✓" : "✗");
-                mark.AddToClassList("requirement__mark");
-                if (met != null)
-                    mark.AddToClassList(isMet ? "requirement__mark--met" : "requirement__mark--missed");
-                row.Add(mark);
+            var mark = new Label(met == null ? string.Empty : met.Value ? "✓" : "✗");
+            mark.AddToClassList("requirement__mark");
+            mark.AddToClassList(met == null ? "requirement__mark--empty" : met.Value ? "requirement__mark--met" : "requirement__mark--missed");
+            row.Add(mark);
 
-                var text = new Label(requirements[i]) { enableRichText = false };
-                text.AddToClassList("requirement__text");
-                row.Add(text);
-                _requirements.Add(row);
-            }
-            _requirementsSection.EnableInClassList(HiddenClass, _requirements.childCount == 0);
+            var text = new Label(requirement) { enableRichText = false };
+            text.AddToClassList("requirement__text");
+            row.Add(text);
+            return row;
         }
 
         /// <param name="feedbacks">One per answer; null or all empty hides the list. Empty ones get no row.</param>

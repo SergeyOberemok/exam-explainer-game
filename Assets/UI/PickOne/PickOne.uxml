@@ -92,6 +92,9 @@
                                     <ui:Label text="QUESTION [Q]" class="chip__text" picking-mode="Ignore" />
                                 </ui:VisualElement>
                             </ui:VisualElement>
+                            <ui:VisualElement name="criteriaButton" class="chip chip--raised panel-tab criteria-chip is-hidden">
+                                <ui:Label text="CRITERIA [C]" class="chip__text" picking-mode="Ignore" />
+                            </ui:VisualElement>
                             <ui:VisualElement name="mapButton" class="chip chip--raised panel-tab map-chip is-hidden">
                                 <ui:Label text="MAP [M]" class="chip__text" picking-mode="Ignore" />
                             </ui:VisualElement>
@@ -107,10 +110,6 @@
                             <ui:VisualElement name="misconceptionSection" class="debrief-block is-hidden">
                                 <ui:Label text="Why it was tempting" class="explanation__title" />
                                 <ui:Label name="misconceptionText" enable-rich-text="false" class="misconception" />
-                            </ui:VisualElement>
-                            <ui:VisualElement name="requirementsSection" class="debrief-block is-hidden">
-                                <ui:Label name="requirementsTitle" text="What the answer had to do" class="explanation__title" />
-                                <ui:VisualElement name="requirementsList" class="requirements" />
                             </ui:VisualElement>
                             <ui:Label text="Explanation" class="explanation__title" />
                             <ui:Label name="explanationText" text="Explanation" enable-rich-text="false" class="explanation__text" />
@@ -211,6 +210,26 @@
                         <ui:Label name="mapEmpty" text="This question has no map yet." class="map__empty is-hidden" />
                     </ui:ScrollView>
                     <ui:Label name="mapHint" text="[M] or [Esc] Close" class="map__hint" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+
+        <ui:VisualElement name="criteriaOverlay" class="map criteria map--hidden">
+            <ui:VisualElement class="map__wrap brutal brutal--s4">
+                <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
+                <ui:VisualElement class="box map__panel">
+                    <ec:GradientElement class="map__strip" start-color="#FFDEAD" mid-color="#A83223" end-color="#FFDEAD" picking-mode="Ignore" />
+                    <ui:VisualElement class="map__header">
+                        <ui:Label name="criteriaTitle" text="Criteria" class="map__title" />
+                        <ui:VisualElement name="criteriaCloseButton" tooltip="Close [Esc]" class="icon-button icon-button--close">
+                            <ui:VisualElement class="icon icon--exit" picking-mode="Ignore" />
+                        </ui:VisualElement>
+                    </ui:VisualElement>
+                    <ui:Label name="criteriaCaption" enable-rich-text="false" class="map__caption" />
+                    <ui:ScrollView name="criteriaScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="map__scroll">
+                        <ui:VisualElement name="criteriaList" class="criteria__list" />
+                    </ui:ScrollView>
+                    <ui:Label text="[C] or [Esc] Close" class="map__hint" />
                 </ui:VisualElement>
             </ui:VisualElement>
         </ui:VisualElement>

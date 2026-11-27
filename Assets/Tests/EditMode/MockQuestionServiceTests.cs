@@ -75,6 +75,7 @@ namespace ExamCards.Exam.Tests
                 var resolution = review.Resolution;
                 var total = resolution.AnswerRequirements.Count;
                 Assert.AreEqual(total, resolution.MetCount(review.CorrectIndex), id);
+                CollectionAssert.AreEqual(resolution.AnswerRequirements, round.Questions.First(q => q.Id == id).Requirements, id);
                 Assert.IsTrue(Enumerable.Range(0, 4).Any(i => i != review.CorrectIndex && resolution.MetCount(i) > 0 && resolution.MetCount(i) < total), id);
             }
         }
