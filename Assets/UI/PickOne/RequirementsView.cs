@@ -26,7 +26,7 @@ namespace ExamCards.UI
         }
 
         /// <param name="requirements">What an answer had to do; null or empty hides the list.</param>
-        /// <param name="met">Whether the answer that counts meets each one, aligned with <paramref name="requirements"/>; shorter counts as not met.</param>
+        /// <param name="met">Whether the answer that counts meets each one, aligned with <paramref name="requirements"/>; shorter counts as not met. Null shows the requirements without marks.</param>
         public void BindRequirements(IReadOnlyList<string> requirements, IReadOnlyList<bool> met)
         {
             _requirements.Clear();
@@ -36,9 +36,11 @@ namespace ExamCards.UI
                 var row = new VisualElement();
                 row.AddToClassList("requirement");
 
-                var mark = new Label(isMet ? "✓" : "✗");
+                // Without marks (the backend hasn't said which answer meets what) a plain bullet, never a ✗.
+                var mark = new Label(met == null ? "•" : isMet ? "✓" : "✗");
                 mark.AddToClassList("requirement__mark");
-                mark.AddToClassList(isMet ? "requirement__mark--met" : "requirement__mark--missed");
+                if (met != null)
+                    mark.AddToClassList(isMet ? "requirement__mark--met" : "requirement__mark--missed");
                 row.Add(mark);
 
                 var text = new Label(requirements[i]) { enableRichText = false };

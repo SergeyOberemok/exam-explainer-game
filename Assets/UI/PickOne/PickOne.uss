@@ -18,6 +18,7 @@
     --pink: #ffdad4;
     --pink-ink: #410100;
     --pink-soft: #fff0ee;
+    --gold-soft: #fff4dc;
     --white: #ffffff;
 }
 
@@ -309,12 +310,15 @@
 
 /* ---------- question section ---------- */
 
+/* The question takes the room the cards don't need: their answers are short. */
 .question-section {
-    flex-shrink: 0;
+    flex-grow: 1;
+    flex-shrink: 1;
 }
 
 .question {
-    height: 300px;
+    flex-grow: 1;
+    min-height: 300px;
     padding: 16px 26px;
     overflow: hidden;
 }
@@ -374,17 +378,38 @@
     white-space: normal;
 }
 
-/* The scenario's facts before the ask, one row each with its role (QuestionPartsView). */
-/* Under the ask, so the question itself is the first thing the panel shows. */
+/* The briefing, above the ask: one row per fact (QuestionPartsView), typed one after another (TypingSequence). */
 .question-parts {
     flex-shrink: 0;
-    margin-top: 10px;
+    margin-bottom: 8px;
 }
 
 .question-part {
     flex-direction: row;
     align-items: flex-start;
     margin-bottom: 6px;
+    transition-property: opacity, translate;
+    transition-duration: 0.3s;
+    transition-timing-function: ease-out;
+}
+
+.question-part--pending {
+    opacity: 0;
+    translate: 0 6px;
+}
+
+/* Icons for the cast members a fact names, at the row's end; they come in once the fact is typed. */
+.question-part__cast {
+    flex-direction: row;
+    flex-shrink: 0;
+    margin-left: 6px;
+    margin-top: 1px;
+    transition-property: opacity;
+    transition-duration: 0.25s;
+}
+
+.question-part--typing .question-part__cast {
+    opacity: 0;
 }
 
 .question-part__role {
@@ -606,7 +631,7 @@
     white-space: normal;
 }
 
-/* ---------- visual entities (shown with the simplified text) ---------- */
+/* ---------- cast: the entities a question and its answers name ---------- */
 
 /* Icon chips for what the question mentions; wraps under the chip row. */
 .entity-strip {
@@ -664,9 +689,13 @@
 .entity--object > .entity__icon { -unity-background-image-tint-color: var(--latin); }
 .entity--object > .entity__name { color: var(--mint-ink); }
 
-.entity--action { background-color: var(--sand); }
-.entity--action > .entity__icon { -unity-background-image-tint-color: var(--sand-ink); }
-.entity--action > .entity__name { color: var(--sand-ink); }
+/* Actions, and concepts (a flag, a state, a pattern): what happens rather than what is there. */
+.entity--action,
+.entity--concept { background-color: var(--sand); }
+.entity--action > .entity__icon,
+.entity--concept > .entity__icon { -unity-background-image-tint-color: var(--sand-ink); }
+.entity--action > .entity__name,
+.entity--concept > .entity__name { color: var(--sand-ink); }
 
 /* The one large icon of a question or an answer card: what it is about, always shown. */
 .hero-icon {
@@ -697,10 +726,18 @@
     -unity-background-image-tint-color: var(--sand-ink);
 }
 
-/* Next to the letter; the auto margin keeps the header's space-between from centring it. */
+/* Next to the letter; the auto margin keeps the header's space-between from centring it. Smaller than the
+   question's, so the compact card keeps its room for the answer. */
 .card__icon {
+    width: 32px;
+    height: 32px;
     margin-left: 8px;
     margin-right: auto;
+}
+
+.card__icon > .hero-icon__image {
+    width: 20px;
+    height: 20px;
 }
 
 .answer-card--correct .card__icon { background-color: var(--mint); }
@@ -719,11 +756,20 @@
 
 /* ---------- answer cards ---------- */
 
+/* The cards take only what their short answers need (the tallest card sets the row), up to a share of the
+   screen; the question takes the rest. Once answered each card also shows its outcome, so the cap rises. */
 .cards-row {
-    flex-grow: 1;
+    flex-grow: 0;
+    flex-shrink: 1;
+    min-height: 170px;
+    max-height: 42%;
     flex-direction: row;
     padding: 8px 0;
-    margin: 14px -10px 8px -10px;
+    margin: 12px -10px 8px -10px;
+}
+
+.cards-row--answered {
+    max-height: 58%;
 }
 
 .answer-card-slot {
@@ -737,14 +783,14 @@
 }
 
 .card__box {
-    padding: 14px;
+    padding: 10px;
 }
 
 .card__header {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 
 .card__key > .chip__text {
@@ -787,13 +833,37 @@
     white-space: normal;
 }
 
-/* Why the answer is right or wrong, and what it misses (the backend's resolution). The reason takes the
-   feedback's place on the card, so it has the feedback's separator. */
-.card__reason {
+/* Once answered: what the answer leads to in the story (a chip for how well it goes, then the line), why it
+   is right or wrong, and what it misses. It takes the feedback's place on the card, so it has the feedback's
+   separator. */
+.card__outcome {
     margin-top: 10px;
     padding-top: 8px;
     border-top-width: 1px;
     border-color: var(--ink);
+}
+
+.card__impact {
+    align-self: flex-start;
+}
+
+.card__impact--success { background-color: var(--mint); }
+.card__impact--success > .chip__text { color: var(--mint-ink); }
+.card__impact--partial { background-color: var(--gold); }
+.card__impact--partial > .chip__text { color: var(--sand-ink); }
+.card__impact--failure { background-color: var(--pink); }
+.card__impact--failure > .chip__text { color: var(--pink-ink); }
+
+.card__consequence {
+    margin-top: 6px;
+    font-size: 13px;
+    -unity-font-style: bold;
+    color: var(--heading);
+    white-space: normal;
+}
+
+.card__reason {
+    margin-top: 6px;
     font-size: 13px;
     -unity-font-style: italic;
     color: var(--heading);
@@ -816,16 +886,17 @@
     white-space: normal;
 }
 
+/* Sized to its text, so the card is as tall as its answer; scrolls only when the row's cap cuts it. */
 .card__scroll {
     flex-grow: 1;
     flex-shrink: 1;
-    flex-basis: 0;
-    margin-bottom: 10px;
+    flex-basis: auto;
+    margin-bottom: 8px;
 }
 
 .select-wrap {
     flex-shrink: 0;
-    height: 40px;
+    height: 34px;
 }
 
 .select-button {
@@ -891,6 +962,19 @@
 
 .answer-card--wrong .select-button__text {
     color: var(--pink-ink);
+}
+
+/* A wrong answer that would partly work reads as less wrong than a plain failure. */
+.answer-card--wrong.answer-card--impact-partial > .card__box {
+    background-color: var(--gold-soft);
+}
+
+.answer-card--wrong.answer-card--impact-partial .select-button {
+    background-color: var(--gold);
+}
+
+.answer-card--wrong.answer-card--impact-partial .select-button__text {
+    color: var(--sand-ink);
 }
 
 .answer-card--dimmed {

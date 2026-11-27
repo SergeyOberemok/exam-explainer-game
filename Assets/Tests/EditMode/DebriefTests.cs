@@ -3,7 +3,7 @@ using NUnit.Framework;
 
 namespace ExamCards.Exam.Tests
 {
-    /// <summary>The domain helpers behind the debrief and the cards: requirements met, card entities and chip texts.</summary>
+    /// <summary>The domain helpers behind the debrief and the cards: requirements met, card cast and chip texts.</summary>
     public class DebriefTests
     {
         static Resolution MakeResolution() => new Resolution
@@ -11,15 +11,15 @@ namespace ExamCards.Exam.Tests
             AnswerRequirements = new[] { "Gets the full history", "Targets the right session", "Passes the ID explicitly" },
             Options = new[]
             {
-                new OptionEvaluation { Index = 0, IsCorrect = false },
-                new OptionEvaluation
+                new AnswerOutcome { Index = 0, IsCorrect = false },
+                new AnswerOutcome
                 {
                     Index = 1,
                     IsCorrect = false,
                     // Text with stray whitespace still matches; one that isn't a requirement is ignored.
                     SupportedRequirements = new[] { "  Gets the full history ", "Passes the ID explicitly", "Something else" },
                 },
-                new OptionEvaluation
+                new AnswerOutcome
                 {
                     Index = 2,
                     IsCorrect = true,
@@ -56,34 +56,73 @@ namespace ExamCards.Exam.Tests
             Assert.AreEqual(0, resolution.MetCount(0));
         }
 
-        static VisualEntity Entity(string name, string @ref = "") => new VisualEntity { Name = name, Ref = @ref };
+        [Test]
+        public void HasRequirementMatches_IsFalseWithoutAnySupportedRequirement()
+        {
+            Assert.IsTrue(MakeResolution().HasRequirementMatches);
+
+            var stored = new Resolution
+            {
+                AnswerRequirements = new[] { "Gets the full history" },
+                Options = new[] { new AnswerOutcome { Index = 0, IsCorrect = true } },
+            };
+            Assert.IsFalse(stored.HasRequirementMatches);
+            Assert.IsFalse(Resolution.Empty.HasRequirementMatches);
+        }
+
+        static CastMember Member(string reference, bool scene) => new CastMember { Ref = reference, Name = reference, InScene = scene };
+
+        static Question MakeQuestion() => new Question
+        {
+            Id = "q",
+            Cast = new[] { Member("e1", true), Member("e6", false), Member("e7", false) },
+            Tools = new[]
+            {
+                new AnswerTool { Index = 0, Text = "a", ComponentRefs = new[] { "e1", "e7" } },
+                new AnswerTool { Index = 1, Text = "b", ComponentRefs = new[] { "e1", "ghost" } },
+            },
+        };
 
         [Test]
-        public void ForAnswerOnly_LeavesOutTheQuestionsEntities_ByRefOrElseByName()
+        public void ToolCast_LeavesOutTheScenesMembers_AndUnknownRefs()
         {
-            var entities = new PromptEntities
-            {
-                Question = new[] { Entity("First Invocation", "e1"), Entity("Runner") },
-                Answers = new[]
-                {
-                    new[] { Entity("First Invocation", "e1"), Entity("CLAUDE.md", "e7") },
-                    // Same name, other ref: a different entity. No ref on one side: matched by name, ignoring case.
-                    new[] { Entity("First Invocation", "e9"), Entity("runner", "e3") },
-                },
-            };
+            var question = MakeQuestion();
 
-            CollectionAssert.AreEqual(new[] { "CLAUDE.md" }, entities.ForAnswerOnly(0).Select(e => e.Name));
-            CollectionAssert.AreEqual(new[] { "First Invocation" }, entities.ForAnswerOnly(1).Select(e => e.Name));
-            Assert.IsEmpty(entities.ForAnswerOnly(2));
-            Assert.IsEmpty(PromptEntities.Empty.ForAnswerOnly(0));
+            CollectionAssert.AreEqual(new[] { "e7" }, question.ToolCast(0).Select(m => m.Ref));
+            Assert.IsEmpty(question.ToolCast(1));
+            Assert.IsEmpty(question.ToolCast(2));
+            CollectionAssert.AreEqual(new[] { "e1" }, question.SceneCast.Select(m => m.Ref));
         }
 
         [Test]
-        public void ForAnswerOnly_KeepsEverythingWhenTheQuestionHasNoEntities()
+        public void CastFor_KeepsTheOrder_AndDropsRepeatsAndUnknownRefs()
         {
-            var entities = new PromptEntities { Answers = new[] { new[] { Entity("Session ID", "e6"), Entity("Hook") } } };
+            var question = MakeQuestion();
 
-            Assert.AreEqual(2, entities.ForAnswerOnly(0).Count);
+            CollectionAssert.AreEqual(new[] { "e7", "e1" },
+                question.CastFor(new[] { "e7", "ghost", "e1", "e7", null }).Select(m => m.Ref));
+            Assert.IsNull(question.FindCast("ghost"));
+        }
+
+        [Test]
+        public void MisconceptionFor_FollowsTheAnswer_AndIsEmptyForTheCorrectOne()
+        {
+            var review = new AnswerReview
+            {
+                CorrectIndex = 1,
+                Resolution = new Resolution
+                {
+                    Options = new[]
+                    {
+                        new AnswerOutcome { Index = 0, Misconception = "Believes X." },
+                        new AnswerOutcome { Index = 1, IsCorrect = true, Misconception = "Never shown." },
+                    },
+                },
+            };
+
+            Assert.AreEqual("Believes X.", review.MisconceptionFor(0));
+            Assert.IsEmpty(review.MisconceptionFor(1));
+            Assert.IsEmpty(review.MisconceptionFor(2));
         }
 
         [TestCase(0, "")]

@@ -8,7 +8,7 @@ namespace ExamCards.Exam
     /// </summary>
     public static class EntityIconResolver
     {
-        /// <summary>The catalog's keys for "nothing more specific", one per entity kind.</summary>
+        /// <summary>The catalog's keys for "nothing more specific": a cast member's by its type, and an action's.</summary>
         public const string ActorIcon = "actor";
         public const string ObjectIcon = "object";
         public const string ActionIcon = "action";
@@ -16,20 +16,22 @@ namespace ExamCards.Exam
         /// <summary>Shown where a question or an answer has no icon of its own.</summary>
         public const string DefaultIcon = ObjectIcon;
 
-        /// <returns>The entity's icon key; the key of its kind when it has none.</returns>
-        public static string Resolve(VisualEntity entity)
+        /// <returns>The member's icon key; the key of its type when it has none.</returns>
+        public static string Resolve(CastMember member)
         {
-            if (entity == null)
+            if (member == null)
                 return ObjectIcon;
-            return CleanKey(entity.Icon) ?? KindIcon(entity.Kind);
+            return CleanKey(member.Icon) ?? TypeIcon(member.Type);
         }
 
-        public static string KindIcon(EntityKind kind) => kind switch
-        {
-            EntityKind.Actor => ActorIcon,
-            EntityKind.Action => ActionIcon,
-            _ => ObjectIcon,
-        };
+        /// <returns>The action's icon key; <see cref="ActionIcon"/> when it has none.</returns>
+        public static string Resolve(QuestionAction action) => CleanKey(action?.Icon) ?? ActionIcon;
+
+        /// <summary>
+        /// The catalog has fallbacks for actors and objects only, so every type that isn't a person or an agent
+        /// (systems, artifacts, concepts…) is drawn as an object until it has a key of its own.
+        /// </summary>
+        public static string TypeIcon(CastType type) => type == CastType.Actor ? ActorIcon : ObjectIcon;
 
         /// <returns>
         /// <paramref name="key"/> trimmed, or null when it isn't a key: lower-case letters and digits in words

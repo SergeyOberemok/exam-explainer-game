@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ExamCards.Exam.Api;
@@ -26,12 +27,12 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[0];
             Assert.AreEqual("POST", request.Method);
-            Assert.AreEqual("http://api.test/v1/game/rounds", request.Url);
+            Assert.AreEqual("http://api.test/v2/game/rounds", request.Url);
             Assert.AreEqual("{\"count\":3}", request.Body);
             Assert.AreEqual(7, request.TimeoutSeconds);
             Assert.AreEqual(2, round.Questions.Count);
             Assert.AreEqual(2, round.FiftyFiftyCharges);
-            Assert.IsTrue(round.Questions[0].CanReveal);
+            Assert.AreEqual("Team", round.Questions[0].Cast[0].Name);
         }
 
         [Test]
@@ -56,10 +57,10 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[1];
             // The round id is escaped as a path segment: a space is %20, not +.
-            Assert.AreEqual("http://api.test/v1/game/rounds/r%201%2Fx/answers", request.Url);
+            Assert.AreEqual("http://api.test/v2/game/rounds/r%201%2Fx/answers", request.Url);
             Assert.AreEqual("{\"question_id\":\"q1\",\"answer_index\":0}", request.Body);
             Assert.AreEqual(1, review.CorrectIndex);
-            Assert.AreEqual("Because.", review.Original.Explanation);
+            Assert.AreEqual("Because.", review.Review.Explanation);
         }
 
         [Test]
@@ -72,7 +73,7 @@ namespace ExamCards.Exam.Tests
 
             var result = Run(round.EliminateAsync("q1"));
 
-            Assert.AreEqual("http://api.test/v1/game/rounds/r1/fifty-fifty", transport.Requests[1].Url);
+            Assert.AreEqual("http://api.test/v2/game/rounds/r1/fifty-fifty", transport.Requests[1].Url);
             Assert.AreEqual("{\"question_id\":\"q1\"}", transport.Requests[1].Body);
             CollectionAssert.AreEqual(new[] { 0, 3 }, result.Eliminated);
             Assert.AreEqual(1, result.Remaining);
@@ -90,7 +91,7 @@ namespace ExamCards.Exam.Tests
 
             Assert.AreEqual(409, e.StatusCode);
             Assert.AreEqual("question already answered", e.Detail);
-            StringAssert.Contains("http://api.test/v1/game/rounds/r1/answers", e.Message);
+            StringAssert.Contains("http://api.test/v2/game/rounds/r1/answers", e.Message);
             StringAssert.Contains("HTTP 409", e.Message);
         }
 
@@ -150,19 +151,20 @@ namespace ExamCards.Exam.Tests
 
         const string SearchJson = @"{
             ""items"": [
-                {""id"": ""s1"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
-                 ""question"": ""What is CORS?"", ""answers"": [{""index"": 1, ""text"": ""B""}, {""index"": 0, ""text"": ""A""}]},
-                {""id"": ""s2"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
-                 ""question"": ""What is DNS?"", ""answers"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}]}
+                {""id"": ""s1"", ""section"": ""Web"", ""assessment_type"": ""mc"",
+                 ""question"": ""What is CORS?"", ""tools"": [{""index"": 1, ""text"": ""B""}, {""index"": 0, ""text"": ""A""}],
+                 ""cast"": [{""ref"": ""e1"", ""name"": ""Browser"", ""type"": ""system"", ""scene"": true}]},
+                {""id"": ""s2"", ""section"": ""Web"", ""assessment_type"": ""mc"",
+                 ""question"": ""What is DNS?"", ""tools"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}]}
             ],
             ""total"": 2
         }";
 
         const string AddedJson = @"{
-            ""item"": {""id"": ""s1"", ""simplified"": false, ""section"": ""Web"", ""assessment_type"": ""mc"",
-                       ""question"": ""What is CORS?"", ""answers"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}]},
-            ""simplified"": [{""id"": ""s1"", ""simplified"": true, ""section"": ""Web"", ""assessment_type"": ""mc"",
-                       ""question"": ""CORS?"", ""answers"": [{""index"": 0, ""text"": ""a""}, {""index"": 1, ""text"": ""b""}]}]
+            ""item"": {""id"": ""s1"", ""section"": ""Web"", ""assessment_type"": ""mc"",
+                       ""question"": ""What is CORS?"", ""tools"": [{""index"": 0, ""text"": ""A""}, {""index"": 1, ""text"": ""B""}],
+                       ""briefing"": [{""role"": ""context"", ""text"": ""A page calls an API."", ""entity_ids"": []}],
+                       ""ask"": {""text"": ""What is CORS?"", ""entity_ids"": []}}
         }";
 
         [Test]
@@ -175,11 +177,12 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[0];
             Assert.AreEqual("POST", request.Method);
-            Assert.AreEqual("http://api.test/v1/search/game-questions", request.Url);
+            Assert.AreEqual("http://api.test/v2/search/game-questions", request.Url);
             Assert.AreEqual("{\"q\":\"a&b c/d \\\"x\\\"\",\"limit\":3}", request.Body);
             Assert.AreEqual(new[] { "s1", "s2" }, new[] { results[0].Id, results[1].Id });
-            CollectionAssert.AreEqual(new[] { "A", "B" }, results[0].Original.Answers);
-            Assert.IsFalse(results[0].CanReveal);
+            CollectionAssert.AreEqual(new[] { "A", "B" }, results[0].Answers);
+            // v2 search results are whole cards, cast included.
+            Assert.AreEqual("Browser", results[0].Cast.Single().Name);
         }
 
         [Test]
@@ -224,18 +227,14 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void Search_RejectsDuplicateOrSimplifiedResults()
+        public void Search_RejectsDuplicateResults()
         {
             var duplicate = new FakeTransport().Reply(200, SearchJson.Replace("\"s2\"", "\"s1\""));
             Assert.Throws<FormatException>(() => Run(MakeService(duplicate).SearchAsync("cors")));
-
-            var simplified = new FakeTransport().Reply(200,
-                SearchJson.Replace("\"id\": \"s2\", \"simplified\": false", "\"id\": \"s2\", \"simplified\": true"));
-            Assert.Throws<FormatException>(() => Run(MakeService(simplified).SearchAsync("cors")));
         }
 
         [Test]
-        public void AddQuestion_PostsToTheRound_AndReturnsTheQuestionWithItsSimplifiedText()
+        public void AddQuestion_PostsToTheRound_AndReturnsTheWholeCard()
         {
             var transport = new FakeTransport()
                 .Reply(201, GameQuestionMapperTests.RoundJson)
@@ -246,21 +245,11 @@ namespace ExamCards.Exam.Tests
 
             var request = transport.Requests[1];
             Assert.AreEqual("POST", request.Method);
-            Assert.AreEqual("http://api.test/v1/game/rounds/r1/questions", request.Url);
+            Assert.AreEqual("http://api.test/v2/game/rounds/r1/questions", request.Url);
             Assert.AreEqual("{\"question_id\":\"s1\"}", request.Body);
             Assert.AreEqual("s1", question.Id);
-            Assert.AreEqual("CORS?", question.Simplified.Question);
-        }
-
-        [Test]
-        public void AddQuestion_WithoutSimplifiedText_CannotReveal()
-        {
-            var transport = new FakeTransport()
-                .Reply(201, GameQuestionMapperTests.RoundJson)
-                .Reply(200, "{\"item\":{\"id\":\"s1\",\"question\":\"Q\",\"answers\":[{\"index\":0,\"text\":\"A\"}]},\"simplified\":[]}");
-            var round = Run(MakeService(transport).StartRoundAsync());
-
-            Assert.IsFalse(Run(round.AddQuestionAsync("s1")).CanReveal);
+            Assert.AreEqual("A page calls an API.", question.Briefing.Single().Text);
+            Assert.AreEqual("What is CORS?", question.Ask.Text);
         }
 
         [Test]

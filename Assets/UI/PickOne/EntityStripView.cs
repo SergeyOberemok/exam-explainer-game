@@ -5,7 +5,7 @@ using UnityEngine.UIElements;
 namespace ExamCards.UI
 {
     /// <summary>
-    /// Fills a container with one chip per <see cref="VisualEntity"/>: its icon, plus its name unless compact
+    /// Fills a container with one chip per <see cref="CastMember"/>: its icon, plus its name unless compact
     /// (then the name is the tooltip). The container is hidden while it has nothing to show.
     /// </summary>
     public sealed class EntityStripView
@@ -15,7 +15,7 @@ namespace ExamCards.UI
         readonly VisualElement _container;
         readonly bool _compact;
         readonly int _maxShown;
-        IReadOnlyList<VisualEntity> _shown;
+        IReadOnlyList<CastMember> _shown;
 
         public EntityStripView(VisualElement container, bool compact, int maxShown)
         {
@@ -25,11 +25,12 @@ namespace ExamCards.UI
         }
 
         /// <param name="entities">What to show; null or empty hides the strip.</param>
-        public void Bind(IReadOnlyList<VisualEntity> entities)
+        public void Bind(IReadOnlyList<CastMember> entities)
         {
             if (entities != null && entities.Count == 0)
                 entities = null;
-            if (ReferenceEquals(entities, _shown))
+            // Lists are rebuilt on every redraw, so compare what they hold.
+            if (SameMembers(entities, _shown))
                 return;
             _shown = entities;
 
@@ -42,11 +43,25 @@ namespace ExamCards.UI
                 _container.Add(CreateChip(entities[i]));
         }
 
-        VisualElement CreateChip(VisualEntity entity)
+        static bool SameMembers(IReadOnlyList<CastMember> a, IReadOnlyList<CastMember> b)
+        {
+            if (a == null || b == null)
+                return a == b;
+            if (a.Count != b.Count)
+                return false;
+            for (var i = 0; i < a.Count; i++)
+            {
+                if (!ReferenceEquals(a[i], b[i]))
+                    return false;
+            }
+            return true;
+        }
+
+        VisualElement CreateChip(CastMember entity)
         {
             var chip = new VisualElement { pickingMode = PickingMode.Position };
             chip.AddToClassList("entity");
-            chip.AddToClassList(KindClass(entity.Kind));
+            chip.AddToClassList(TypeClass(entity.Type));
 
             var icon = new VisualElement { pickingMode = PickingMode.Ignore };
             icon.AddToClassList("entity__icon");
@@ -68,10 +83,10 @@ namespace ExamCards.UI
             return chip;
         }
 
-        static string KindClass(EntityKind kind) => kind switch
+        static string TypeClass(CastType type) => type switch
         {
-            EntityKind.Actor => "entity--actor",
-            EntityKind.Action => "entity--action",
+            CastType.Actor => "entity--actor",
+            CastType.Concept => "entity--concept",
             _ => "entity--object",
         };
     }

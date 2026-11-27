@@ -10,9 +10,14 @@ namespace ExamCards.Exam
     /// Stand-in for live data, used by tests and whenever <see cref="QuestionServices.Factory"/> isn't set:
     /// starts a <see cref="LocalExamRound"/> over a fixed set of questions after a short fake latency.
     /// Search looks through those and a few more, which can be added to the round.
+    /// The questions have the shape of the backend's composed cards: a briefing, the ask, a cast, the answers as
+    /// tools, and one outcome per answer.
     /// </summary>
     public sealed class MockQuestionService : IQuestionService, IQuestionSearch
     {
+        /// <summary>The chapter every sample question belongs to.</summary>
+        public const string SampleScenario = "sample-service";
+
         readonly int _latencyMs;
 
         public MockQuestionService(int latencyMs = 300)
@@ -37,122 +42,37 @@ namespace ExamCards.Exam
             cancellationToken.ThrowIfCancellationRequested();
 
             bool Matches(string value) => value != null && value.IndexOf(text, StringComparison.OrdinalIgnoreCase) >= 0;
+            // Like the backend's search results: whole cards, without their key.
             return BuildCatalog()
                 .Select(keyed => keyed.Question)
-                .Where(q => Matches(q.Original.Question) || Matches(q.Section) || q.Original.Answers.Any(Matches))
-                // Like the backend's search results: no simplified text, entities or parts until the question is added.
-                .Select(q => new Question
-                {
-                    Id = q.Id,
-                    Section = q.Section,
-                    Source = q.Source,
-                    Original = new QuestionPrompt { Question = q.Original.Question, Answers = q.Original.Answers },
-                })
+                .Where(q => Matches(q.Text) || Matches(q.Section) || q.Answers.Any(Matches))
                 .ToList();
         }
 
-        sealed class Version
-        {
-            public string Question;
-            public string[] Answers;
-            public string[] Feedbacks;
-            public string Explanation;
-            public PromptEntities Entities;
-        }
+        // ---------- builders ----------
 
-        /// <summary>Icon keys for the sample entities, as the backend would pick them; the rest get their kind's icon.</summary>
-        static readonly Dictionary<string, string> Icons = new Dictionary<string, string>
-        {
-            ["Customer"] = "user", ["User"] = "user", ["Account"] = "person",
-            ["API"] = "api", ["Call API"] = "send", ["Request"] = "send", ["Return Status Code"] = "result",
-            ["Log In"] = "permission", ["Permission"] = "permission", ["Session"] = "session",
-            ["Browser"] = "web", ["Web Page"] = "web", ["Page"] = "web", ["DNS"] = "server",
-            ["CORS"] = "policy", ["Certificate"] = "security", ["Connection"] = "link",
-            ["Database Connection"] = "database", ["Query"] = "search", ["Run Query"] = "search", ["Index"] = "steps",
-            ["Order"] = "order", ["Balance"] = "calculation", ["Transfer"] = "transfer", ["Transaction"] = "transfer",
-            ["Memory"] = "memory", ["Read Replica"] = "copy", ["Compression"] = "compress",
-            ["File"] = "file", ["Branch"] = "branch", ["Commit"] = "commit", ["Push"] = "upload", ["Force-Push"] = "upload",
-            ["Undo Commit"] = "undo", ["git revert"] = "undo", ["git reset --hard"] = "reset",
-        };
+        static CastMember Member(string reference, string name, CastType type, string icon, bool scene = true) =>
+            new CastMember { Ref = reference, Name = name, Type = type, Icon = icon, InScene = scene };
 
-        static VisualEntity Entity(string name, EntityKind kind, string[] aliases) =>
-            new VisualEntity { Name = name, Kind = kind, Aliases = aliases, Icon = Icons.TryGetValue(name, out var icon) ? icon : null };
+        static QuestionPart Part(PartRole role, string text, params string[] refs) =>
+            new QuestionPart { Role = role, Text = text, EntityRefs = refs };
 
-        static VisualEntity Actor(string name, params string[] aliases) => Entity(name, EntityKind.Actor, aliases);
-        static VisualEntity Thing(string name, params string[] aliases) => Entity(name, EntityKind.Object, aliases);
-        static VisualEntity Step(string name, params string[] aliases) => Entity(name, EntityKind.Action, aliases);
+        static AnswerTool Tool(int index, string text, string label, string icon, params string[] components) =>
+            new AnswerTool { Index = index, Text = text, Label = label, Icon = icon, ComponentRefs = components };
 
-        /// <summary>The question takes the icon of its first entity and each answer that of its own first one.</summary>
-        static PromptEntities Entities(VisualEntity[] question, params VisualEntity[][] answers) =>
-            new PromptEntities
+        static AnswerOutcome Outcome(int index, bool correct, AnswerImpact impact, string consequence, string reason,
+            string misconception = "", string[] meets = null, string[] gaps = null) =>
+            new AnswerOutcome
             {
-                QuestionIcon = EntityIconResolver.Resolve(question[0]),
-                Question = question,
-                Answers = answers,
-                AnswerIcons = answers.Select(answer => EntityIconResolver.Resolve(answer[0])).ToArray(),
+                Index = index,
+                IsCorrect = correct,
+                Impact = impact,
+                Consequence = consequence,
+                Reason = reason,
+                Misconception = misconception,
+                SupportedRequirements = meets ?? Array.Empty<string>(),
+                Gaps = gaps ?? Array.Empty<string>(),
             };
-
-        /// <summary>Objective keys (main one first) and difficulty of the sample questions, like the backend's tags.</summary>
-        static readonly Dictionary<string, (string[] Objectives, int Difficulty)> Tags =
-            new Dictionary<string, (string[] Objectives, int Difficulty)>
-            {
-                ["q1"] = (new[] { "sample-http-status" }, 1),
-                ["q2"] = (new[] { "sample-query-performance" }, 1),
-                ["q3"] = (new[] { "sample-git-history" }, 2),
-                ["q4"] = (new[] { "sample-browser-security", "sample-http-status" }, 2),
-                ["q5"] = (new[] { "sample-transactions" }, 3),
-            };
-
-        /// <summary>Chapter, stage and story line of the sample questions, like the backend's story records.</summary>
-        static readonly Dictionary<string, (string Stage, string Beat)> Story =
-            new Dictionary<string, (string Stage, string Beat)>
-            {
-                ["q1"] = ("build", "The first endpoint of the sample service answers, and nobody agrees what it should say."),
-                ["q2"] = ("scale", "The sample service slows down as its tables grow."),
-                ["q3"] = ("team", "Two teammates changed the same history and want it sorted out."),
-                ["q4"] = ("incident", "The browser refuses a request that works everywhere else."),
-                ["q5"] = ("incident", "A transfer left money in neither account."),
-            };
-
-        /// <summary>The chapter every sample question of the round belongs to.</summary>
-        public const string SampleScenario = "sample-service";
-
-        /// <summary>
-        /// The original's feedback and explanation are the only review, as on the backend; the simplified version
-        /// has no review of its own. Both texts get the same entities.
-        /// </summary>
-        static KeyedQuestion Make(string id, string section, int correctIndex, Version original, Version simplified)
-        {
-            var entities = simplified.Entities ?? PromptEntities.Empty;
-            Decompositions.TryGetValue(id, out var decomposition);
-            return new KeyedQuestion
-            {
-                Question = new Question
-                {
-                    Id = id,
-                    Section = section,
-                    Source = "mock",
-                    Objectives = Tags[id].Objectives,
-                    Difficulty = Tags[id].Difficulty,
-                    Scenario = SampleScenario,
-                    Stage = Story[id].Stage,
-                    Beat = Story[id].Beat,
-                    Original = new QuestionPrompt { Question = original.Question, Answers = original.Answers, Entities = entities },
-                    Simplified = new QuestionPrompt { Question = simplified.Question, Answers = simplified.Answers, Entities = entities },
-                    Parts = decomposition.Parts ?? Array.Empty<QuestionPart>(),
-                    Flow = decomposition.Flow ?? DecisionFlow.Empty,
-                },
-                Review = new AnswerReview
-                {
-                    CorrectIndex = correctIndex,
-                    Outcome = "The sample service moves on.",
-                    Original = new PromptReview { Explanation = original.Explanation, Feedbacks = original.Feedbacks },
-                    Resolution = decomposition.Resolution ?? Resolution.Empty,
-                },
-            };
-        }
-
-        static QuestionPart Part(PartRole role, string text) => new QuestionPart { Role = role, Text = text };
 
         static FlowNode Node(string id, FlowNodeType type, string label, bool isQuestion = false, bool added = false) =>
             new FlowNode { Id = id, Type = type, Label = label, Status = FlowStatus.Explicit, IsQuestion = isQuestion, Added = added };
@@ -160,32 +80,115 @@ namespace ExamCards.Exam
         static FlowEdge Edge(string source, string target, bool added = false) =>
             new FlowEdge { Source = source, Target = target, Type = FlowEdgeType.Next, Status = FlowStatus.Explicit, Added = added };
 
-        static OptionEvaluation Option(int index, bool correct, string reason, params string[] gaps) =>
-            new OptionEvaluation { Index = index, IsCorrect = correct, Reason = reason, Gaps = gaps };
-
-        static OptionEvaluation Meets(OptionEvaluation option, params string[] requirements)
+        sealed class Sample
         {
-            option.SupportedRequirements = requirements;
-            return option;
+            public string Id;
+            public string Section;
+            public string[] Objectives;
+            public int Difficulty;
+            public string Stage;
+            public string Beat;
+            public string Icon;
+            public string Text;
+            public QuestionPart[] Briefing;
+            public QuestionPart Ask;
+            public CastMember[] Cast;
+            public AnswerTool[] Tools;
+            public DecisionFlow Flow = DecisionFlow.Empty;
+            public int Correct;
+            public string[] Feedbacks;
+            public string Explanation;
+            public string[] Requirements = Array.Empty<string>();
+            public AnswerOutcome[] Outcomes = Array.Empty<AnswerOutcome>();
+            public DecisionFlow ResolutionFlow = DecisionFlow.Empty;
+            public string Rule = string.Empty;
+            public string Win = "The sample service moves on.";
+            public string Fail = "The sample service stumbles, and the team digs in again.";
         }
+
+        static KeyedQuestion Make(Sample sample) => new KeyedQuestion
+        {
+            Question = new Question
+            {
+                Id = sample.Id,
+                Section = sample.Section,
+                Source = "mock",
+                Text = sample.Text,
+                Tools = sample.Tools,
+                Objectives = sample.Objectives,
+                Difficulty = sample.Difficulty,
+                Scenario = SampleScenario,
+                Stage = sample.Stage,
+                Beat = sample.Beat,
+                Icon = sample.Icon,
+                Briefing = sample.Briefing ?? Array.Empty<QuestionPart>(),
+                Ask = sample.Ask,
+                Cast = sample.Cast ?? Array.Empty<CastMember>(),
+                Flow = sample.Flow,
+            },
+            Review = new AnswerReview
+            {
+                CorrectIndex = sample.Correct,
+                Review = new PromptReview { Explanation = sample.Explanation, Feedbacks = sample.Feedbacks },
+                Resolution = new Resolution
+                {
+                    AnswerRequirements = sample.Requirements,
+                    Options = sample.Outcomes,
+                    Flow = sample.ResolutionFlow,
+                    Rule = sample.Rule,
+                },
+            },
+            Win = sample.Win,
+            Fail = sample.Fail,
+        };
+
+        // ---------- questions ----------
+
+        /// <summary>Every question search can find: the round's, and some that only search reaches.</summary>
+        static IReadOnlyList<KeyedQuestion> BuildCatalog() => BuildQuestions().Concat(BuildExtraQuestions()).ToList();
 
         const string Q1Failure = "Reports an authentication failure";
         const string Q1LogIn = "Tells the client to log in again";
         const string Q1Resource = "Keeps the resource's existence accurate";
 
-        /// <summary>What the backend's decomposition and resolution would add, for two of the sample questions.</summary>
-        static readonly Dictionary<string, (QuestionPart[] Parts, DecisionFlow Flow, Resolution Resolution)> Decompositions =
-            new Dictionary<string, (QuestionPart[] Parts, DecisionFlow Flow, Resolution Resolution)>
+        static IReadOnlyList<KeyedQuestion> BuildQuestions()
+        {
+            return new[]
             {
-                ["q1"] = (
-                    new[]
+                Make(new Sample
+                {
+                    Id = "q1",
+                    Section = "Sample: Web Fundamentals",
+                    Objectives = new[] { "sample-http-status" },
+                    Difficulty = 1,
+                    Stage = "build",
+                    Beat = "The first endpoint of the sample service answers, and nobody agrees what it should say.",
+                    Icon = "api",
+                    Text = "SCENARIO: A public website sends users to a login page whenever their session has expired. QUESTION: Which HTTP status code should the API return for a request that carries an expired session token?",
+                    Briefing = new[]
                     {
-                        Part(PartRole.Context, "A public website sends users to a login page whenever their session has expired."),
-                        Part(PartRole.Problem, "A request arrives carrying a session token that has already expired."),
-                        Part(PartRole.Goal, "The client should know that logging in again will fix it."),
-                        Part(PartRole.Ask, "Which HTTP status code should the API return for a request that carries an expired session token?"),
+                        Part(PartRole.Context, "A public website sends users to a login page whenever their session has expired.", "e1", "e2"),
+                        Part(PartRole.Problem, "A request arrives carrying a session token that has already expired.", "e3", "e4"),
+                        Part(PartRole.Goal, "The client should know that logging in again will fix it.", "e1"),
                     },
-                    new DecisionFlow
+                    Ask = Part(PartRole.Ask, "Which HTTP status code should the API return for a request that carries an expired session token?", "e2", "e3"),
+                    Cast = new[]
+                    {
+                        Member("e1", "User", CastType.Actor, "user"),
+                        Member("e2", "API", CastType.System, "api"),
+                        Member("e3", "Session Token", CastType.Artifact, "session"),
+                        Member("e4", "Request", CastType.Object, "send"),
+                        Member("e5", "Log In", CastType.Concept, "permission", scene: false),
+                        Member("e6", "Permission", CastType.Concept, "permission", scene: false),
+                    },
+                    Tools = new[]
+                    {
+                        Tool(0, "400 Bad Request", "Blame the request's format", "send", "e4"),
+                        Tool(1, "401 Unauthorized", "Ask for valid credentials", "permission", "e5", "e3"),
+                        Tool(2, "403 Forbidden", "Refuse the known identity", "policy", "e6"),
+                        Tool(3, "404 Not Found", "Say the resource is missing", "web", "e2"),
+                    },
+                    Flow = new DecisionFlow
                     {
                         Primary = "decision_flow",
                         Trigger = "A request with an expired token",
@@ -197,157 +200,215 @@ namespace ExamCards.Exam
                         },
                         Edges = new[] { Edge("n1", "n2"), Edge("n2", "n3") },
                     },
-                    new Resolution
+                    Correct = 1,
+                    Feedbacks = new[]
                     {
-                        AnswerRequirements = new[] { Q1Failure, Q1LogIn, Q1Resource },
-                        Options = new[]
-                        {
-                            Meets(Option(0, false, "400 blames the request's format, but the request is well formed.", "Doesn't report an authentication failure"), Q1Resource),
-                            Meets(Option(1, true, "401 says valid credentials are needed, which is exactly what logging in again provides."), Q1Failure, Q1LogIn, Q1Resource),
-                            Meets(Option(2, false, "403 says the identity is known and refused, so logging in again would not help.", "Doesn't tell the client to log in again"), Q1Failure, Q1Resource),
-                            Option(3, false, "404 says the resource is missing, which sends the client looking in the wrong place.", "Doesn't report an authentication failure", "Misleads the client about the resource"),
-                        },
-                        Rule = "Missing or expired credentials are 401; known but not allowed is 403.",
-                    }),
-                ["q3"] = (
-                    new[]
-                    {
-                        Part(PartRole.Context, "A developer works on a branch the whole team pushes to."),
-                        Part(PartRole.CurrentState, "A commit that is already pushed introduced a bug."),
-                        Part(PartRole.Constraint, "Teammates may already have pulled the commit."),
-                        Part(PartRole.Ask, "What is the safest way to undo that commit?"),
+                        "400 means the request itself is malformed, which is not the problem here.",
+                        "401 means valid authentication is required, so the client knows to log in again.",
+                        "403 means the identity is known but not allowed, so logging in again would not help.",
+                        "404 means the resource does not exist, which would mislead the client.",
                     },
-                    DecisionFlow.Empty,
-                    new Resolution
+                    Explanation = "HTTP separates authentication from authorization. An expired token is an authentication failure, which is what 401 reports.",
+                    Requirements = new[] { Q1Failure, Q1LogIn, Q1Resource },
+                    Outcomes = new[]
                     {
-                        Options = new[]
-                        {
-                            Option(0, true, "A revert adds a commit that undoes the change, so nobody's history is rewritten."),
-                            Option(1, false, "A hard reset and force-push rewrite history that teammates already have.", "Keeps shared history intact"),
-                            Option(2, false, "Recreating the branch is disruptive and loses work that isn't in that copy.", "Keeps everyone's work"),
-                            Option(3, false, "Edits that are never committed never reach the branch.", "Actually changes the shared branch"),
-                        },
-                        Rule = "On a shared branch, undo with a new commit instead of rewriting history.",
-                    }),
+                        Outcome(0, false, AnswerImpact.Failure, "The client retries the same request and fails again.",
+                            "400 blames the request's format, but the request is well formed.",
+                            "A failed login is a problem with the request's format.",
+                            new[] { Q1Resource }, new[] { "Doesn't report an authentication failure" }),
+                        Outcome(1, true, AnswerImpact.Success, "The client sends the user to the login page, and the session starts again.",
+                            "401 says valid credentials are needed, which is exactly what logging in again provides.",
+                            meets: new[] { Q1Failure, Q1LogIn, Q1Resource }),
+                        Outcome(2, false, AnswerImpact.Partial, "The user is told they aren't allowed, though logging in again would have worked.",
+                            "403 says the identity is known and refused, so logging in again would not help.",
+                            "An expired session means the user isn't allowed.",
+                            new[] { Q1Failure, Q1Resource }, new[] { "Doesn't tell the client to log in again" }),
+                        Outcome(3, false, AnswerImpact.Failure, "The client decides the page is gone and stops asking for it.",
+                            "404 says the resource is missing, which sends the client looking in the wrong place.",
+                            "Hiding the resource is a safe answer to any failed request.",
+                            gaps: new[] { "Doesn't report an authentication failure", "Misleads the client about the resource" }),
+                    },
+                    Rule = "Missing or expired credentials are 401; known but not allowed is 403.",
+                }),
+                Make(new Sample
+                {
+                    Id = "q2",
+                    Section = "Sample: Databases",
+                    Objectives = new[] { "sample-query-performance" },
+                    Difficulty = 1,
+                    Stage = "scale",
+                    Beat = "The sample service slows down as its tables grow.",
+                    Icon = "database",
+                    Text = "SCENARIO: A reporting query filters a table of ten million orders by customer, and it has become slow as the table has grown. QUESTION: Which change most directly speeds up this query?",
+                    Briefing = new[]
+                    {
+                        Part(PartRole.Context, "A reporting query filters a table of ten million orders by customer.", "e1", "e2"),
+                        Part(PartRole.Problem, "The query has become slow as the table has grown.", "e1"),
+                    },
+                    Ask = Part(PartRole.Ask, "Which change most directly speeds up this query?", "e1"),
+                    Cast = new[]
+                    {
+                        Member("e1", "Query", CastType.Object, "search"),
+                        Member("e2", "Order", CastType.Object, "order"),
+                        Member("e3", "Index", CastType.Concept, "steps", scene: false),
+                        Member("e4", "Connection Pool", CastType.System, "database", scene: false),
+                    },
+                    Tools = new[]
+                    {
+                        Tool(0, "Increase the connection pool size.", "Allow more connections", "database", "e4"),
+                        Tool(1, "Add more columns to the query's result.", "Return more data", "steps", "e1"),
+                        Tool(2, "Add an index on the customer column.", "Index the filtered column", "steps", "e3"),
+                        Tool(3, "Run the query twice and keep the second result.", "Repeat the query", "search", "e1"),
+                    },
+                    Correct = 2,
+                    Feedbacks = new[]
+                    {
+                        "More connections allow more concurrent queries but don't make this one faster.",
+                        "Returning more data makes the query slower, not faster.",
+                        "An index lets the database find matching rows without scanning the whole table.",
+                        "Repeating the query only adds work.",
+                    },
+                    Explanation = "Without an index the database scans every row. An index on the filtered column turns that scan into a fast lookup.",
+                }),
+                Make(new Sample
+                {
+                    Id = "q3",
+                    Section = "Sample: Version Control",
+                    Objectives = new[] { "sample-git-history" },
+                    Difficulty = 2,
+                    Stage = "team",
+                    Beat = "Two teammates changed the same history and want it sorted out.",
+                    Icon = "commit",
+                    Text = "SCENARIO: A developer has pushed a commit to a shared branch and later finds that it introduced a bug. QUESTION: What is the safest way to undo that commit?",
+                    Briefing = new[]
+                    {
+                        Part(PartRole.Context, "A developer works on a branch the whole team pushes to.", "e1", "e2"),
+                        Part(PartRole.CurrentState, "A commit that is already pushed introduced a bug.", "e3"),
+                        Part(PartRole.Constraint, "Teammates may already have pulled the commit.", "e3"),
+                    },
+                    Ask = Part(PartRole.Ask, "What is the safest way to undo that commit?", "e3"),
+                    Cast = new[]
+                    {
+                        Member("e1", "Developer", CastType.Actor, "user"),
+                        Member("e2", "Shared Branch", CastType.Artifact, "branch"),
+                        Member("e3", "Commit", CastType.Artifact, "commit"),
+                        Member("e4", "git revert", CastType.Concept, "undo", scene: false),
+                        Member("e5", "git reset --hard", CastType.Concept, "reset", scene: false),
+                    },
+                    Tools = new[]
+                    {
+                        Tool(0, "Run git revert on the commit and push the result.", "Undo with a new commit", "undo", "e4", "e3"),
+                        Tool(1, "Run git reset --hard and force-push the branch.", "Rewrite the branch's history", "reset", "e5", "e2"),
+                        Tool(2, "Delete the branch and recreate it from a teammate's copy.", "Recreate the branch", "branch", "e2"),
+                        Tool(3, "Edit the files back by hand without committing.", "Fix the files locally", "file", "e1"),
+                    },
+                    Correct = 0,
+                    Feedbacks = new[]
+                    {
+                        "A revert adds a new commit that undoes the change, so shared history stays intact.",
+                        "A force-push rewrites shared history and can discard teammates' work.",
+                        "This is disruptive and can lose any work that isn't in that copy.",
+                        "Uncommitted edits never reach the shared branch, so the bug stays.",
+                    },
+                    Explanation = "On shared branches, prefer adding a commit over rewriting history. git revert does that.",
+                    Outcomes = new[]
+                    {
+                        Outcome(0, true, AnswerImpact.Success, "The fix lands as a new commit and nobody's checkout breaks.",
+                            "A revert adds a commit that undoes the change, so nobody's history is rewritten."),
+                        Outcome(1, false, AnswerImpact.Failure, "Teammates' next pull fails, and work they pushed is gone.",
+                            "A hard reset and force-push rewrite history that teammates already have.",
+                            "Rewriting a pushed commit is harmless if you force-push.", gaps: new[] { "Keeps shared history intact" }),
+                        Outcome(2, false, AnswerImpact.Partial, "The bug is gone, along with a morning of someone's work.",
+                            "Recreating the branch is disruptive and loses work that isn't in that copy.",
+                            "Any copy of a branch is as good as the shared one.", gaps: new[] { "Keeps everyone's work" }),
+                        Outcome(3, false, AnswerImpact.Failure, "The bug stays on the branch for everyone else.",
+                            "Edits that are never committed never reach the branch.",
+                            "Local edits change the shared branch.", gaps: new[] { "Actually changes the shared branch" }),
+                    },
+                    Rule = "On a shared branch, undo with a new commit instead of rewriting history.",
+                }),
             };
-
-        /// <summary>Every question search can find: the round's, and some that only search reaches.</summary>
-        static IReadOnlyList<KeyedQuestion> BuildCatalog() => BuildQuestions().Concat(BuildExtraQuestions()).ToList();
+        }
 
         static IEnumerable<KeyedQuestion> BuildExtraQuestions()
         {
-            yield return Make("q4", "Sample: Web Fundamentals", 3,
-                new Version
-                {
-                    Question = "SCENARIO: A browser page loads data from an API on another domain, and the request fails before the API sees it. QUESTION: Which mechanism decides whether the browser may make that request?",
-                    Answers = new[] { "DNS resolution", "TLS certificate pinning", "HTTP keep-alive", "CORS (Cross-Origin Resource Sharing)" },
-                    Feedbacks = new[]
-                    {
-                        "DNS only finds the server's address; it says nothing about which pages may call it.",
-                        "Pinning restricts which certificates a client trusts, not which origins may call the API.",
-                        "Keep-alive reuses connections; it doesn't allow or block requests.",
-                        "The browser checks the API's CORS headers before letting a page on another origin read the response.",
-                    },
-                    Explanation = "Browsers block cross-origin requests unless the server allows them with CORS headers, often after a preflight request.",
-                },
-                new Version
-                {
-                    Question = "A web page can't call an API on another domain. What controls whether the browser allows it?",
-                    Answers = new[] { "DNS", "Certificate pinning", "Keep-alive", "CORS" },
-                    Entities = Entities(new[] { Thing("Web Page", "page"), Thing("Browser"), Thing("API"), Step("Call API") },
-                        new[] { Thing("DNS") }, new[] { Thing("Certificate") }, new[] { Thing("Connection") }, new[] { Thing("CORS", "CORS headers") }),
-                });
-            yield return Make("q5", "Sample: Databases", 0,
-                new Version
-                {
-                    Question = "SCENARIO: Two transfers run at the same time against the same bank account, and the final balance is wrong. QUESTION: Which database feature prevents this kind of lost update?",
-                    Answers = new[] { "Transactions with proper isolation", "A larger buffer pool", "Read replicas", "Column compression" },
-                    Feedbacks = new[]
-                    {
-                        "Isolation makes concurrent transactions behave as if they ran one after another, so no update is lost.",
-                        "More memory speeds queries up but doesn't coordinate concurrent writes.",
-                        "Replicas spread reads; the conflicting writes still hit the primary.",
-                        "Compression saves space and has nothing to do with concurrency.",
-                    },
-                    Explanation = "A lost update happens when two writes interleave. Transactions with a suitable isolation level, or row locks, serialize them.",
-                },
-                new Version
-                {
-                    Question = "Two transfers to one account at the same time leave a wrong balance. What prevents this?",
-                    Answers = new[] { "Transactions", "More memory", "Read replicas", "Compression" },
-                    Entities = Entities(new[] { Step("Transfer", "transfers"), Thing("Account"), Thing("Balance") },
-                        new[] { Thing("Transaction", "transactions") }, new[] { Thing("Memory") }, new[] { Thing("Read Replica", "read replicas") }, new[] { Thing("Compression") }),
-                });
-        }
-
-        static IReadOnlyList<KeyedQuestion> BuildQuestions()
-        {
-            return new[]
+            yield return Make(new Sample
             {
-                Make("q1", "Sample: Web Fundamentals", 1,
-                    new Version
-                    {
-                        Question = "SCENARIO: A public website sends users to a login page whenever their session has expired. QUESTION: Which HTTP status code should the API return for a request that carries an expired session token?",
-                        Answers = new[] { "400 Bad Request", "401 Unauthorized", "403 Forbidden", "404 Not Found" },
-                        Feedbacks = new[]
-                        {
-                            "400 means the request itself is malformed, which is not the problem here.",
-                            "401 means valid authentication is required, so the client knows to log in again.",
-                            "403 means the identity is known but not allowed, so logging in again would not help.",
-                            "404 means the resource does not exist, which would mislead the client.",
-                        },
-                        Explanation = "HTTP separates authentication from authorization. An expired token is an authentication failure, which is what 401 reports.",
-                    },
-                    new Version
-                    {
-                        Question = "A user's login session has expired. Which status code should the API return?",
-                        Answers = new[] { "400: the request is malformed", "401: the user must log in", "403: the user isn't allowed", "404: the page doesn't exist" },
-                        Entities = Entities(new[] { Actor("User", "user's"), Thing("Session", "login session"), Thing("API"), Step("Return Status Code") },
-                            new[] { Thing("Request") }, new[] { Step("Log In") }, new[] { Thing("Permission") }, new[] { Thing("Page") }),
-                    }),
-                Make("q2", "Sample: Databases", 2,
-                    new Version
-                    {
-                        Question = "SCENARIO: A reporting query filters a table of ten million orders by customer, and it has become slow as the table has grown. QUESTION: Which change most directly speeds up this query?",
-                        Answers = new[] { "Increase the connection pool size.", "Add more columns to the query's result.", "Add an index on the customer column.", "Run the query twice and keep the second result." },
-                        Feedbacks = new[]
-                        {
-                            "More connections allow more concurrent queries but don't make this one faster.",
-                            "Returning more data makes the query slower, not faster.",
-                            "An index lets the database find matching rows without scanning the whole table.",
-                            "Repeating the query only adds work.",
-                        },
-                        Explanation = "Without an index the database scans every row. An index on the filtered column turns that scan into a fast lookup.",
-                    },
-                    new Version
-                    {
-                        Question = "A query that finds orders by customer has become slow. What helps most?",
-                        Answers = new[] { "More database connections", "Returning more columns", "An index on the customer column", "Running the query twice" },
-                        Entities = Entities(new[] { Thing("Query"), Thing("Order", "orders"), Actor("Customer") },
-                            new[] { Thing("Database Connection", "database connections") }, new[] { Thing("Column", "columns") }, new[] { Thing("Index") }, new[] { Step("Run Query") }),
-                    }),
-                Make("q3", "Sample: Version Control", 0,
-                    new Version
-                    {
-                        Question = "SCENARIO: A developer has pushed a commit to a shared branch and later finds that it introduced a bug. QUESTION: What is the safest way to undo that commit?",
-                        Answers = new[] { "Run git revert on the commit and push the result.", "Run git reset --hard and force-push the branch.", "Delete the branch and recreate it from a teammate's copy.", "Edit the files back by hand without committing." },
-                        Feedbacks = new[]
-                        {
-                            "A revert adds a new commit that undoes the change, so shared history stays intact.",
-                            "A force-push rewrites shared history and can discard teammates' work.",
-                            "This is disruptive and can lose any work that isn't in that copy.",
-                            "Uncommitted edits never reach the shared branch, so the bug stays.",
-                        },
-                        Explanation = "On shared branches, prefer adding a commit over rewriting history. git revert does that.",
-                    },
-                    new Version
-                    {
-                        Question = "You pushed a bad commit to a shared branch. What is the safest way to undo it?",
-                        Answers = new[] { "git revert, then push", "git reset --hard, then force-push", "Delete and recreate the branch", "Fix the files but don't commit" },
-                        Entities = Entities(new[] { Thing("Commit", "bad commit"), Thing("Branch", "shared branch"), Step("Undo Commit") },
-                            new[] { Thing("git revert"), Step("Push") }, new[] { Thing("git reset --hard"), Step("Force-Push") }, new[] { Thing("Branch") }, new[] { Thing("File", "files") }),
-                    }),
-            };
+                Id = "q4",
+                Section = "Sample: Web Fundamentals",
+                Objectives = new[] { "sample-browser-security", "sample-http-status" },
+                Difficulty = 2,
+                Stage = "incident",
+                Beat = "The browser refuses a request that works everywhere else.",
+                Icon = "web",
+                Text = "SCENARIO: A browser page loads data from an API on another domain, and the request fails before the API sees it. QUESTION: Which mechanism decides whether the browser may make that request?",
+                Briefing = new[]
+                {
+                    Part(PartRole.Context, "A browser page loads data from an API on another domain.", "e1", "e2"),
+                    Part(PartRole.Problem, "The request fails before the API sees it.", "e2"),
+                },
+                Ask = Part(PartRole.Ask, "Which mechanism decides whether the browser may make that request?", "e1"),
+                Cast = new[]
+                {
+                    Member("e1", "Browser", CastType.System, "web"),
+                    Member("e2", "API", CastType.ExternalService, "api"),
+                    Member("e3", "CORS", CastType.Concept, "policy", scene: false),
+                },
+                Tools = new[]
+                {
+                    Tool(0, "DNS resolution", "Look up the address", "server"),
+                    Tool(1, "TLS certificate pinning", "Restrict trusted certificates", "security"),
+                    Tool(2, "HTTP keep-alive", "Reuse connections", "link"),
+                    Tool(3, "CORS (Cross-Origin Resource Sharing)", "Check the server's origin rules", "policy", "e3"),
+                },
+                Correct = 3,
+                Feedbacks = new[]
+                {
+                    "DNS only finds the server's address; it says nothing about which pages may call it.",
+                    "Pinning restricts which certificates a client trusts, not which origins may call the API.",
+                    "Keep-alive reuses connections; it doesn't allow or block requests.",
+                    "The browser checks the API's CORS headers before letting a page on another origin read the response.",
+                },
+                Explanation = "Browsers block cross-origin requests unless the server allows them with CORS headers, often after a preflight request.",
+            });
+            yield return Make(new Sample
+            {
+                Id = "q5",
+                Section = "Sample: Databases",
+                Objectives = new[] { "sample-transactions" },
+                Difficulty = 3,
+                Stage = "incident",
+                Beat = "A transfer left money in neither account.",
+                Icon = "transfer",
+                Text = "SCENARIO: Two transfers run at the same time against the same bank account, and the final balance is wrong. QUESTION: Which database feature prevents this kind of lost update?",
+                Briefing = new[]
+                {
+                    Part(PartRole.CurrentState, "Two transfers run at the same time against the same bank account.", "e1", "e2"),
+                    Part(PartRole.Problem, "The final balance is wrong.", "e2"),
+                },
+                Ask = Part(PartRole.Ask, "Which database feature prevents this kind of lost update?"),
+                Cast = new[]
+                {
+                    Member("e1", "Transfer", CastType.Object, "transfer"),
+                    Member("e2", "Account", CastType.Object, "calculation"),
+                },
+                Tools = new[]
+                {
+                    Tool(0, "Transactions with proper isolation", "Isolate concurrent writes", "transfer"),
+                    Tool(1, "A larger buffer pool", "Add memory", "memory"),
+                    Tool(2, "Read replicas", "Spread the reads", "copy"),
+                    Tool(3, "Column compression", "Compress the data", "compress"),
+                },
+                Correct = 0,
+                Feedbacks = new[]
+                {
+                    "Isolation makes concurrent transactions behave as if they ran one after another, so no update is lost.",
+                    "More memory speeds queries up but doesn't coordinate concurrent writes.",
+                    "Replicas spread reads; the conflicting writes still hit the primary.",
+                    "Compression saves space and has nothing to do with concurrency.",
+                },
+                Explanation = "A lost update happens when two writes interleave. Transactions with a suitable isolation level, or row locks, serialize them.",
+            });
         }
     }
 }

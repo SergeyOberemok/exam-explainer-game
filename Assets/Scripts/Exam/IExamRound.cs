@@ -37,7 +37,7 @@ namespace ExamCards.Exam
         /// Adds a question (for example a search result) to the round so it can be answered here. Adding one the
         /// round already has changes nothing and returns it again, so a retry is safe.
         /// </summary>
-        /// <returns>The question as the player sees it, with its simplified version if it has one.</returns>
+        /// <returns>The question as the player sees it, without its key.</returns>
         Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default);
 
         /// <summary>

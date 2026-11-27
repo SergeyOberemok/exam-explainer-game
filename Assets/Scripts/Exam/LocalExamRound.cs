@@ -79,15 +79,15 @@ namespace ExamCards.Exam
             if (_answers.TryGetValue(questionId, out var previous))
             {
                 // Like the backend: the recorded answer counts, also when another one is sent later.
-                return Task.FromResult(previous == answerIndex ? keyed.Review : keyed.Review.WithAnsweredIndex(previous));
+                return Task.FromResult(keyed.ReviewFor(previous));
             }
-            if (answerIndex < 0 || answerIndex >= keyed.Question.Original.Answers.Count)
+            if (answerIndex < 0 || answerIndex >= keyed.Question.Answers.Count)
                 throw new ArgumentOutOfRangeException(nameof(answerIndex));
             if (_eliminated.TryGetValue(questionId, out var eliminated) && eliminated.Contains(answerIndex))
                 throw new InvalidOperationException("That answer was eliminated by 50/50.");
 
             _answers[questionId] = answerIndex;
-            return Task.FromResult(keyed.Review);
+            return Task.FromResult(keyed.ReviewFor(answerIndex));
         }
 
         public Task<FiftyFiftyResult> EliminateAsync(string questionId, CancellationToken cancellationToken = default)
@@ -101,7 +101,7 @@ namespace ExamCards.Exam
             if (_chargesLeft <= 0)
                 throw new InvalidOperationException("No 50/50 charges left.");
 
-            var wrong = Enumerable.Range(0, keyed.Question.Original.Answers.Count)
+            var wrong = Enumerable.Range(0, keyed.Question.Answers.Count)
                 .Where(i => i != keyed.Review.CorrectIndex)
                 .ToList();
             if (wrong.Count < ExamSession.EliminatedPerUse)

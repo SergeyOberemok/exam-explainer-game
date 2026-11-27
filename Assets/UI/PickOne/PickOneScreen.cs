@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ExamCards.Exam;
+using ExamCards.Exam.Api;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UIElements;
@@ -11,9 +12,9 @@ using UnityEngine.UIElements;
 namespace ExamCards.UI
 {
     /// <summary>
-    /// Drives the PickOne screen: starts a round from the question service, shows its questions one by one,
-    /// and handles card picks (click or keys 1-4), Reveal (click or R), 50/50 (click or F), Next, Play Again
-    /// and Retry (click, Enter or Space) and the final score. When the loaded questions are answered, Next loads
+    /// Drives the PickOne screen: starts a round from the question service, shows its questions one by one
+    /// (the story beat, the briefing item by item, then the ask), and handles card picks (click or keys 1-4),
+    /// 50/50 (click or F), Next, Play Again and Retry (click, Enter or Space) and the final score. When the loaded questions are answered, Next loads
     /// more for the same round (none it has had), so play goes on until the lives or the questions run out.
     /// Answers and 50/50 are checked by the round,
     /// so they run asynchronously; a failed request leaves the question as it was and shows a message.
@@ -44,6 +45,15 @@ namespace ExamCards.UI
         const string ExamOverText = "No lives left, so no more questions can be added to this round.";
         const string LoadingMoreText = "Loading more questions…";
         const string LoadMoreFailedText = "Could not load more questions. Press Next to retry.";
+        const string RateLimitedText = "Too many requests. Wait a moment, then try again.";
+        const string CardsAnsweredClass = "cards-row--answered";
+
+        /// <summary>
+        /// The question's parts type like someone writing instructions: a little faster than one long text, each
+        /// part capped on its own, with a short breath before the next.
+        /// </summary>
+        static readonly TypewriterOptions QuestionTyping = new(110f, 2.5f, 0.1f);
+        const float QuestionStepGapSeconds = 0.25f;
 
         [SerializeField] VisualTreeAsset _answerCardTemplate;
 
@@ -95,12 +105,16 @@ namespace ExamCards.UI
         /// answer opens the debrief.
         /// </summary>
         bool _showQuestionAfterAnswer;
-        VisualElement _simplifiedBadge;
+
+        /// <summary>Types a new question's beat, briefing rows and ask one after another.</summary>
+        TypingSequence _typing;
+
+        /// <summary>What the question panel showed at the last redraw; a change scrolls it back to the top.</summary>
+        string _panelView;
         VisualElement _questionIcon;
         EntityStripView _questionEntities;
         ScrollView _questionScroll;
         Label _questionText;
-        TypewriterLabel _questionTypewriter;
         VisualElement _explanationSection;
         Label _explanationText;
         Label _progressLabel;
@@ -110,7 +124,6 @@ namespace ExamCards.UI
         VisualElement _fiftyFiftyButton;
         Label _fiftyFiftyCount;
         Label _statusText;
-        Button _revealButton;
         Button _nextButton;
         Button _retryButton;
         VisualElement _resultsOverlay;
@@ -155,12 +168,13 @@ namespace ExamCards.UI
             _devIdChip = root.Q("devIdChip");
             _devIdLabel = root.Q<Label>("devIdLabel");
             _devIdChip.RegisterCallback<ClickEvent>(OnDevIdClicked);
-            _simplifiedBadge = root.Q("simplifiedBadge");
             _questionIcon = root.Q("questionIcon");
             _questionEntities = new EntityStripView(root.Q("questionEntities"), compact: false, maxShown: MaxQuestionEntities);
             _questionScroll = root.Q<ScrollView>("questionScroll");
             _questionText = root.Q<Label>("questionText");
-            _questionTypewriter = new TypewriterLabel(_questionText);
+            _typing = new TypingSequence(_questionScroll, QuestionTyping, QuestionStepGapSeconds);
+            _typing.StepStarted += OnTypingStepStarted;
+            _questionScroll.RegisterCallback<ClickEvent>(OnQuestionPanelClicked);
             _explanationSection = root.Q("explanationSection");
             _explanationText = root.Q<Label>("explanationText");
             _progressLabel = root.Q<Label>("progressLabel");
@@ -170,7 +184,6 @@ namespace ExamCards.UI
             _fiftyFiftyButton = root.Q("fiftyFiftyButton");
             _fiftyFiftyCount = root.Q<Label>("fiftyFiftyCount");
             _statusText = root.Q<Label>("statusText");
-            _revealButton = root.Q<Button>("revealButton");
             _nextButton = root.Q<Button>("nextButton");
             _retryButton = root.Q<Button>("retryButton");
             _resultsOverlay = root.Q("resultsOverlay");
@@ -188,7 +201,6 @@ namespace ExamCards.UI
             _search.Chosen += OnSearchResultChosen;
             _search.CloseRequested += CloseSearch;
             _fiftyFiftyButton.RegisterCallback<ClickEvent>(OnFiftyFiftyClicked);
-            _revealButton.clicked += OnRevealPressed;
             _nextButton.clicked += OnNextPressed;
             _retryButton.clicked += LoadRound;
             _playAgainButton.clicked += LoadRound;
@@ -202,7 +214,12 @@ namespace ExamCards.UI
         {
             CancelRound();
             CancelSearch();
-            _questionTypewriter?.Complete();
+            if (_typing != null)
+            {
+                _typing.Complete();
+                _typing.StepStarted -= OnTypingStepStarted;
+            }
+            _questionScroll?.UnregisterCallback<ClickEvent>(OnQuestionPanelClicked);
             _session = null;
             _exitButton?.UnregisterCallback<ClickEvent>(OnExitClicked);
             _chapterChip?.UnregisterCallback<ClickEvent>(OnChapterClicked);
@@ -219,8 +236,6 @@ namespace ExamCards.UI
                 _search = null;
             }
             _fiftyFiftyButton?.UnregisterCallback<ClickEvent>(OnFiftyFiftyClicked);
-            if (_revealButton != null)
-                _revealButton.clicked -= OnRevealPressed;
             if (_nextButton != null)
                 _nextButton.clicked -= OnNextPressed;
             if (_retryButton != null)
@@ -263,9 +278,10 @@ namespace ExamCards.UI
                 return;
             }
 
-            if (keyboard[Key.R].wasPressedThisFrame)
+            // Enter or Space while the question is still typing shows it all at once.
+            if (_typing.IsPlaying && WasNextKeyPressed(keyboard))
             {
-                OnRevealPressed();
+                _typing.Complete();
                 return;
             }
 
@@ -327,11 +343,15 @@ namespace ExamCards.UI
             _nextButton.AddToClassList(HiddenClass);
             _explanationSection.AddToClassList(HiddenClass);
             _fiftyFiftyButton.SetEnabled(false);
-            _revealButton.SetEnabled(false);
+            _typing.Stop();
+            _questionParts.Bind(null);
+            _storyBeat.AddToClassList(HiddenClass);
             _cardsRow.Clear();
+            _cardsRow.RemoveFromClassList(CardsAnsweredClass);
             _cards.Clear();
+            _panelView = null;
             ShowStatus(null);
-            _questionTypewriter.ShowImmediately(LoadingText);
+            _questionText.text = LoadingText;
 
             CancelRound();
             _roundCancellation = new CancellationTokenSource();
@@ -369,7 +389,7 @@ namespace ExamCards.UI
                 if (token.IsCancellationRequested)
                     return;
                 Debug.LogException(e, this);
-                ShowLoadFailure(LoadFailedText);
+                ShowLoadFailure(IsRateLimited(e) ? RateLimitedText : LoadFailedText);
                 return;
             }
 
@@ -390,7 +410,8 @@ namespace ExamCards.UI
         void ShowLoadFailure(string message)
         {
             _loadFailed = true;
-            _questionTypewriter.ShowImmediately(message);
+            _typing.Stop();
+            _questionText.text = message;
             _retryButton.RemoveFromClassList(HiddenClass);
         }
 
@@ -409,7 +430,7 @@ namespace ExamCards.UI
             ShowStatus(null);
             _showScenario = false;
             _showQuestionAfterAnswer = false;
-            EnsureCardCount(question.Original.Answers.Count);
+            EnsureCardCount(question.Answers.Count);
             RenderPrompt(animateQuestion: true);
         }
 
@@ -471,74 +492,91 @@ namespace ExamCards.UI
         }
 
         /// <summary>
-        /// Shows the current text and state. Used for a new question, an answer, a 50/50 and a reveal.
-        /// A new question types its text out; the other redraws leave a running animation alone, except an
-        /// answer or a different text, which show the text at once.
+        /// Shows the current text and state. Used for a new question, an answer, a 50/50 and a scenario toggle.
+        /// A new question shows its briefing item by item and then types its ask; the other redraws leave a
+        /// running animation alone, except an answer or a different text, which show everything at once.
         /// </summary>
         void RenderPrompt(bool animateQuestion = false)
         {
             var question = _session.Current;
-            var prompt = _session.CurrentPrompt;
-            var review = _session.CurrentPromptReview;
+            var review = _session.CurrentReview?.Review;
             var answered = _session.IsCurrentAnswered;
 
             var percent = Mathf.RoundToInt(100f * _session.AnsweredCount / _session.Total);
             _progressPercent.text = $"{percent}%";
             _progressFill.style.width = Length.Percent(percent);
 
-            // The simplified text has the scenario woven in; only the original has a stem to show instead, or,
-            // when the backend decomposed it, its ask with the scenario's facts as parts under it.
-            var fullText = _session.IsCurrentRevealed || _showScenario;
-            var ask = fullText ? null : question.Ask;
-            var text = fullText ? prompt.Question : ask ?? question.OriginalText;
+            // A decomposed question shows its briefing, fact by fact, and then its ask; otherwise the stem (the
+            // chapter stands for the scenario paragraph). The chapter chip brings back the whole text.
+            var ask = _showScenario ? null : question.Ask?.Text;
+            var text = _showScenario ? question.Text : ask ?? question.OriginalText;
             // Once answered, the panel shows the debrief or, on the question tab, the question without it.
             var debrief = answered && !_showQuestionAfterAnswer;
-            _questionParts.Bind(ask != null && !debrief ? question.Parts : null);
+            var briefing = ask != null && !debrief ? question.Briefing : null;
             _questionText.EnableInClassList(HiddenClass, debrief);
             _panelTabs.EnableInClassList(HiddenClass, !answered);
             _debriefTab.EnableInClassList(ActiveTabClass, debrief);
             _questionTab.EnableInClassList(ActiveTabClass, answered && !debrief);
+            var showBeat = !debrief && !string.IsNullOrEmpty(question.Beat);
+            _storyBeat.EnableInClassList(HiddenClass, !showBeat);
             if (animateQuestion && !answered)
-                _questionTypewriter.Type(text);
-            else if (answered || !_questionTypewriter.IsTyping || _questionTypewriter.Text != text)
-                _questionTypewriter.ShowImmediately(text);
+            {
+                // Typed one after another, like someone writing the player instructions: the beat, each fact
+                // of the briefing, then the ask.
+                _questionParts.Bind(briefing, question.CastFor, forTyping: true);
+                var steps = new List<TypingStep>();
+                if (showBeat)
+                    steps.Add(new TypingStep(_storyBeat, question.Beat));
+                steps.AddRange(_questionParts.Steps);
+                steps.Add(new TypingStep(_questionText, text));
+                _typing.Play(steps);
+            }
+            else if (!answered && _typing.IsPlaying && _typing.FinalText == text)
+            {
+                // Still typing (a 50/50 or another redraw): leave it be.
+            }
+            else
+            {
+                // An answer or another text shows everything at once.
+                _typing.Complete();
+                _questionParts.Bind(briefing, question.CastFor);
+                _storyBeat.text = question.Beat;
+                _questionText.text = text;
+            }
+            _cardsRow.EnableInClassList(CardsAnsweredClass, answered);
             _explanationText.text = review?.Explanation;
 
             _chapterLabel.text = ChapterText(question);
             _chapterChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(question.Scenario));
             RenderDevId(question.Id);
-            _storyBeat.text = question.Beat;
-            _storyBeat.EnableInClassList(HiddenClass, debrief || string.IsNullOrEmpty(question.Beat));
             _difficultyLabel.text = QuestionLabels.Difficulty(question.Difficulty);
             _difficultyChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_difficultyLabel.text));
             // The objective can name the answer ("sessions"), so it is part of the debrief.
             _objectiveLabel.text = answered && question.Objectives.Count > 0 ? QuestionLabels.Objective(question.Objectives[0]) : string.Empty;
             _objectiveChip.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_objectiveLabel.text));
-            var outcome = answered ? _session.CurrentReview?.Outcome : null;
-            _storyOutcome.text = outcome ?? string.Empty;
-            _storyOutcome.EnableInClassList(HiddenClass, string.IsNullOrEmpty(outcome));
+            var storyLine = answered ? _session.CurrentReview?.StoryLine : null;
+            _storyOutcome.text = storyLine ?? string.Empty;
+            _storyOutcome.EnableInClassList(HiddenClass, string.IsNullOrEmpty(storyLine));
             var resolution = answered ? _session.CurrentReview?.Resolution : null;
             _resolutionRule.text = resolution?.Rule ?? string.Empty;
             _resolutionRule.EnableInClassList(HiddenClass, string.IsNullOrEmpty(resolution?.Rule));
             _explanationSection.EnableInClassList(HiddenClass, !debrief);
             _explanationSection.EnableInClassList("explanation--alone", debrief);
-            RenderDebrief(answered ? _session.CurrentReview : null, review);
-            _simplifiedBadge.EnableInClassList(HiddenClass, !_session.IsCurrentRevealed);
+            RenderDebrief(answered ? _session.CurrentReview : null);
 
-            // The large icons and entity chips say what the question and each answer are about, so they stay
-            // the same for both texts (a reveal swaps only the text); the backend sends the same ones with both.
-            var entities = question.Entities;
-            EntityIcons.Show(_questionIcon, entities.QuestionIcon);
-            _questionEntities.Bind(entities.Question);
+            // The large icons say what the question and each answer are about; the chips show the cast. The
+            // question's strip has the scene's members, so a card adds only those its answer alone names.
+            EntityIcons.Show(_questionIcon, question.Icon);
+            _questionEntities.Bind(question.SceneCast);
 
+            // Requirement counts only mean something once the backend says which answer meets which.
+            var requirementCount = resolution != null && resolution.HasRequirementMatches ? resolution.AnswerRequirements.Count : 0;
             for (var i = 0; i < _cards.Count; i++)
             {
-                _cards[i].Bind(prompt.Answers[i], review?.Feedbacks[i]);
-                _cards[i].BindIcon(entities.IconForAnswer(i));
-                // The question's strip already shows the entities every answer shares.
-                _cards[i].BindEntities(entities.ForAnswerOnly(i));
-                _cards[i].BindResolution(
-                    resolution?.ForAnswer(i), resolution?.MetCount(i) ?? 0, resolution?.AnswerRequirements.Count ?? 0);
+                _cards[i].Bind(question.Answers[i], review?.Feedbacks[i]);
+                _cards[i].BindIcon(question.IconForAnswer(i));
+                _cards[i].BindEntities(question.ToolCast(i));
+                _cards[i].BindResolution(resolution?.ForAnswer(i), resolution?.MetCount(i) ?? 0, requirementCount);
                 _cards[i].SetState(GetCardState(i));
             }
 
@@ -547,36 +585,57 @@ namespace ExamCards.UI
 
             _fiftyFiftyCount.text = _session.FiftyFiftyRemaining.ToString();
             _fiftyFiftyButton.SetEnabled(_session.CanEliminate);
-            _revealButton.SetEnabled(question.CanReveal);
-            _revealButton.text = _session.IsCurrentRevealed ? "Show Original [R]" : "Show Simplified [R]";
 
             _nextButton.text = _session.IsLastQuestion ? "See Results" : "Next Question";
             _nextButton.EnableInClassList(HiddenClass, !answered);
 
-            ScrollQuestionPanel();
+            // Back to the top for a new question, the debrief or the other text; not for a 50/50 or a busy state.
+            var view = $"{_session.CurrentIndex}|{question.Id}|{debrief}|{_showScenario}";
+            if (animateQuestion || view != _panelView)
+            {
+                _panelView = view;
+                ScrollQuestionPanel();
+            }
+        }
+
+        /// <summary>Keeps the part that starts typing in view, once its row has a layout.</summary>
+        void OnTypingStepStarted(TypingStep step)
+        {
+            var target = (VisualElement)step.Row ?? step.Label;
+            _questionScroll.schedule.Execute(() =>
+            {
+                if (_typing.IsPlaying && target.panel != null)
+                    _questionScroll.ScrollTo(target);
+            });
+        }
+
+        /// <summary>A click on the question while it types shows it all at once.</summary>
+        void OnQuestionPanelClicked(ClickEvent evt)
+        {
+            if (_typing.IsPlaying)
+                _typing.Complete();
         }
 
         /// <summary>
         /// The debrief's lists: why the answer that counts was tempting (when wrong), what the answer had to do
         /// with a mark for each requirement it met, and every answer's feedback. A null review clears them.
         /// </summary>
-        void RenderDebrief(AnswerReview review, PromptReview promptReview)
+        void RenderDebrief(AnswerReview review)
         {
             var counted = review == null ? null : _session.AnsweredIndex;
-            var wrong = review != null && counted != review.CorrectIndex;
-            var misconception = wrong ? review.Misconception : null;
+            var misconception = counted is int answer ? review.MisconceptionFor(answer) : null;
             _misconceptionText.text = misconception ?? string.Empty;
             _misconceptionSection.EnableInClassList(HiddenClass, string.IsNullOrEmpty(misconception));
 
             var resolution = review?.Resolution;
             var requirements = resolution?.AnswerRequirements;
-            var met = counted is int index ? resolution?.RequirementsMetBy(index) : null;
+            var met = counted is int index && resolution.HasRequirementMatches ? resolution.RequirementsMetBy(index) : null;
             var metCount = met?.Count(m => m) ?? 0;
             _requirementsTitle.text = requirements == null || met == null || met.Count == 0
                 ? "What the answer had to do"
                 : $"What the answer had to do · yours meets {metCount} of {requirements.Count}";
             _requirements.BindRequirements(requirements, met);
-            _requirements.BindAnswerNotes(review == null ? null : promptReview?.Feedbacks, review?.CorrectIndex ?? -1, counted);
+            _requirements.BindAnswerNotes(review?.Review?.Feedbacks, review?.CorrectIndex ?? -1, counted);
         }
 
         AnswerCardState GetCardState(int index)
@@ -666,7 +725,7 @@ namespace ExamCards.UI
                 if (token.IsCancellationRequested || session != _session)
                     return;
                 Debug.LogException(e, this);
-                ShowStatus(failureText);
+                ShowStatus(IsRateLimited(e) ? RateLimitedText : failureText);
                 RenderPrompt();
                 return;
             }
@@ -675,18 +734,7 @@ namespace ExamCards.UI
                 RenderPrompt();
         }
 
-        void OnRevealPressed()
-        {
-            if (_session == null)
-                return;
-            if (_session.ToggleSimplified())
-            {
-                // The text it swaps is on the question tab.
-                if (_session.IsCurrentAnswered)
-                    _showQuestionAfterAnswer = true;
-                RenderPrompt();
-            }
-        }
+        static bool IsRateLimited(Exception e) => e is ApiException { IsRateLimited: true };
 
         void OnNextPressed()
         {
@@ -827,7 +875,7 @@ namespace ExamCards.UI
                 if (token.IsCancellationRequested)
                     return;
                 Debug.LogException(e, this);
-                _search.ShowMessage(SearchFailedText);
+                _search.ShowMessage(IsRateLimited(e) ? RateLimitedText : SearchFailedText);
                 return;
             }
 
@@ -883,8 +931,7 @@ namespace ExamCards.UI
             PlayNowOutcome outcome;
             try
             {
-                // The player found it by its exam wording; play it in the game's simplified text.
-                outcome = await session.PlayNowAsync(question.Id, reveal: true, cancellationToken: token);
+                outcome = await session.PlayNowAsync(question.Id, token);
             }
             catch (OperationCanceledException)
             {
@@ -895,7 +942,7 @@ namespace ExamCards.UI
                 if (token.IsCancellationRequested || session != _session)
                     return;
                 Debug.LogException(e, this);
-                _search.ShowMessage(AddFailedText);
+                _search.ShowMessage(IsRateLimited(e) ? RateLimitedText : AddFailedText);
                 return;
             }
 

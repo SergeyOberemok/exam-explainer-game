@@ -4,134 +4,121 @@ using System.Linq;
 
 namespace ExamCards.Exam.Api
 {
-    /// <summary>Turns backend <c>/game</c> responses into the game's models, rejecting inconsistent data.</summary>
+    /// <summary>
+    /// Turns backend <c>/v2/game</c> responses into the game's models. What decides play (ids, answers, the key) is
+    /// checked strictly and a bad response fails; what only describes a question (cast, briefing, icons, flows,
+    /// outcomes) is cleaned leniently, dropping the bad pieces, so it never fails a round.
+    /// </summary>
     public static class GameQuestionMapper
     {
         /// <summary>The <see cref="Question.Source"/> of every question that came from the API.</summary>
         public const string Source = "api";
 
-        /// <returns>The round's questions in play order, with their simplified versions joined by id.</returns>
+        /// <returns>The round's questions in play order.</returns>
         /// <exception cref="FormatException">The round is inconsistent; the message names the question id.</exception>
-        public static IReadOnlyList<Question> BuildQuestions(GameRoundDto round)
+        public static IReadOnlyList<Question> BuildQuestions(GameCardRoundDto round)
         {
             if (round == null)
                 throw new FormatException("The round response is empty.");
             if (string.IsNullOrEmpty(round.round_id))
                 throw new FormatException("The round has no id.");
-
-            return JoinQuestions(round.items, round.simplified);
+            return ToQuestions(round.items, "returned");
         }
 
-        /// <returns>The batch's questions in order, with their simplified versions joined by id.</returns>
+        /// <returns>The batch's questions in order.</returns>
         /// <exception cref="FormatException">The batch is for another index, or inconsistent.</exception>
-        public static IReadOnlyList<Question> BuildBatch(GameRoundBatchDto batch, int batchIndex)
+        public static IReadOnlyList<Question> BuildBatch(GameCardBatchDto batch, int batchIndex)
         {
             if (batch == null)
                 throw new FormatException($"Batch {batchIndex}: the response is empty.");
             if (batch.batch_index != batchIndex)
                 throw new FormatException($"Batch {batchIndex}: the response is for batch {batch.batch_index}.");
-            return JoinQuestions(batch.items, batch.simplified);
+            return ToQuestions(batch.items, "returned");
         }
 
-        static IReadOnlyList<Question> JoinQuestions(GameQuestionDto[] items, GameQuestionDto[] simplifiedItems)
-        {
-            var originals = items ?? Array.Empty<GameQuestionDto>();
-            var originalIds = new HashSet<string>();
-            foreach (var original in originals)
-            {
-                if (original == null || string.IsNullOrEmpty(original.id))
-                    throw new FormatException("A question has no id.");
-                if (original.simplified)
-                    throw new FormatException($"Question {original.id}: listed as an original but marked simplified.");
-                if (!originalIds.Add(original.id))
-                    throw new FormatException($"Question {original.id}: returned more than once.");
-            }
-
-            var simplifiedById = new Dictionary<string, GameQuestionDto>();
-            foreach (var simplified in simplifiedItems ?? Array.Empty<GameQuestionDto>())
-            {
-                if (simplified == null || string.IsNullOrEmpty(simplified.id))
-                    throw new FormatException("A simplified question has no id.");
-                if (!simplified.simplified)
-                    throw new FormatException($"Question {simplified.id}: simplified version is not marked simplified.");
-                if (!originalIds.Contains(simplified.id))
-                    throw new FormatException($"Question {simplified.id}: simplified version has no original in this round.");
-                if (!simplifiedById.TryAdd(simplified.id, simplified))
-                    throw new FormatException($"Question {simplified.id}: more than one simplified version.");
-            }
-
-            return originals.Select(original =>
-            {
-                simplifiedById.TryGetValue(original.id, out var simplified);
-                return ToQuestion(original, simplified);
-            }).ToList();
-        }
-
-        /// <returns>The search results in their order; they never have simplified text.</returns>
+        /// <returns>The search results in their order.</returns>
         /// <exception cref="FormatException">A result is inconsistent, or listed twice.</exception>
-        public static IReadOnlyList<Question> ToSearchResults(GameQuestionListDto list)
+        public static IReadOnlyList<Question> ToSearchResults(GameCardListDto list)
         {
             if (list == null)
                 throw new FormatException("The search response is empty.");
-
-            var ids = new HashSet<string>();
-            return (list.items ?? Array.Empty<GameQuestionDto>()).Select(item =>
-            {
-                CheckOriginal(item);
-                if (!ids.Add(item.id))
-                    throw new FormatException($"Question {item.id}: found more than once.");
-                return ToQuestion(item, null);
-            }).ToList();
+            return ToQuestions(list.items, "found");
         }
 
         /// <exception cref="FormatException">The response is for another question, or inconsistent.</exception>
-        public static Question ToAddedQuestion(GameRoundQuestionDto result, string questionId)
+        public static Question ToAddedQuestion(GameCardRoundQuestionDto result, string questionId)
         {
             if (result?.item == null)
                 throw new FormatException($"Question {questionId}: the add-question response is empty.");
-            CheckOriginal(result.item);
             if (result.item.id != questionId)
                 throw new FormatException($"Question {questionId}: the add-question response is for question {result.item.id}.");
-
-            var simplified = result.simplified ?? Array.Empty<GameQuestionDto>();
-            if (simplified.Length > 1)
-                throw new FormatException($"Question {questionId}: more than one simplified version.");
-            var version = simplified.Length == 1 ? simplified[0] : null;
-            if (version != null && (version.id != questionId || !version.simplified))
-                throw new FormatException($"Question {questionId}: the simplified version doesn't match the question.");
-            return ToQuestion(result.item, version);
+            return ToQuestion(result.item);
         }
 
-        static void CheckOriginal(GameQuestionDto dto)
+        static IReadOnlyList<Question> ToQuestions(GameCardDto[] items, string verb)
         {
-            if (dto == null || string.IsNullOrEmpty(dto.id))
+            var ids = new HashSet<string>();
+            return (items ?? Array.Empty<GameCardDto>()).Select(item =>
+            {
+                var question = ToQuestion(item);
+                if (!ids.Add(question.Id))
+                    throw new FormatException($"Question {question.Id}: {verb} more than once.");
+                return question;
+            }).ToList();
+        }
+
+        static Question ToQuestion(GameCardDto card)
+        {
+            if (card == null || string.IsNullOrEmpty(card.id))
                 throw new FormatException("A question has no id.");
-            if (dto.simplified)
-                throw new FormatException($"Question {dto.id}: listed as an original but marked simplified.");
-        }
 
-        static Question ToQuestion(GameQuestionDto original, GameQuestionDto simplified)
-        {
+            var cast = ToCast(card.cast);
+            var refs = new HashSet<string>(cast.Select(member => member.Ref));
             var question = new Question
             {
-                Id = original.id,
-                Section = original.section,
+                Id = card.id,
+                Section = card.section,
                 Source = Source,
-                Original = ToPrompt(original),
-                Simplified = simplified == null ? null : ToPrompt(simplified),
-                Objectives = ToObjectives(original.objectives),
-                Difficulty = original.difficulty >= 1 && original.difficulty <= 3 ? original.difficulty : 0,
+                Text = card.question ?? string.Empty,
+                Tools = ToTools(card, refs),
+                Objectives = ToObjectives(card.objectives),
+                Difficulty = card.difficulty >= 1 && card.difficulty <= 3 ? card.difficulty : 0,
                 // Like objectives, the story only describes a question: a bad key is dropped, never fatal.
-                Scenario = EntityIconResolver.CleanKey(original.scenario) ?? string.Empty,
-                Stage = EntityIconResolver.CleanKey(original.stage) ?? string.Empty,
-                Stem = original.stem?.Trim() ?? string.Empty,
-                Beat = original.beat?.Trim() ?? string.Empty,
-                // Only originals have parts; the rephrase gets the same flow, so it stands in for a missing one.
-                Parts = ToParts(original.parts),
-                Flow = ToFlow(original.flow) is { IsEmpty: false } flow ? flow : ToFlow(simplified?.flow),
+                Scenario = EntityIconResolver.CleanKey(card.scenario) ?? string.Empty,
+                Stage = EntityIconResolver.CleanKey(card.stage) ?? string.Empty,
+                Stem = card.stem?.Trim() ?? string.Empty,
+                Beat = card.beat?.Trim() ?? string.Empty,
+                Icon = EntityIconResolver.CleanKey(card.icon),
+                Briefing = ToBriefing(card.briefing, refs),
+                Ask = ToAsk(card.ask, refs),
+                Cast = cast,
+                Actions = ToActions(card.actions, refs),
+                Flow = ToFlow(card.map, refs),
             };
             QuestionValidator.ValidateQuestion(question);
             return question;
+        }
+
+        /// <summary>The answers in index order; indices must be 0..n-1 (the validator checks the count).</summary>
+        static IReadOnlyList<AnswerTool> ToTools(GameCardDto card, HashSet<string> refs)
+        {
+            var tools = (card.tools ?? Array.Empty<GameToolDto>())
+                .Where(tool => tool != null)
+                .OrderBy(tool => tool.index)
+                .ToArray();
+            for (var i = 0; i < tools.Length; i++)
+            {
+                if (tools[i].index != i)
+                    throw new FormatException($"Question {card.id}: answer indices are not 0..{tools.Length - 1}.");
+            }
+            return tools.Select(tool => new AnswerTool
+            {
+                Index = tool.index,
+                Text = tool.text ?? string.Empty,
+                Label = tool.label?.Trim() ?? string.Empty,
+                Icon = EntityIconResolver.CleanKey(tool.icon),
+                ComponentRefs = KnownRefs(tool.components, refs),
+            }).ToArray();
         }
 
         /// <summary>
@@ -145,147 +132,79 @@ namespace ExamCards.Exam.Api
                 .Distinct()
                 .ToArray();
 
-        /// <param name="answerIndex">The answer sent; null for a recorded answer, which may be any.</param>
-        /// <exception cref="FormatException">The response is for another answer, incomplete, or contradicts itself.</exception>
-        public static AnswerReview ToReview(GameAnswerResultDto result, string questionId, int? answerIndex)
-        {
-            if (result == null)
-                throw new FormatException($"Question {questionId}: the answer response is empty.");
-            if (result.question_id != questionId || (answerIndex.HasValue && result.answer_index != answerIndex.Value))
-                throw new FormatException($"Question {questionId}: the answer response is for question {result.question_id}, answer {result.answer_index}.");
-            if (result.is_correct != (result.correct_index == result.answer_index))
-                throw new FormatException($"Question {questionId}: the answer response contradicts itself about the correct answer.");
-            // JsonUtility fills a missing field with its default (correct_index 0, empty review) instead of failing,
-            // and every playable question has at least two answers, so an empty feedback list means a missing review.
-            if (result.original?.feedbacks == null || result.original.feedbacks.Length == 0)
-                throw new FormatException($"Question {questionId}: the answer response has no review.");
+        // Cast, briefing, actions, flows and outcomes only explain a question, so bad pieces are dropped instead
+        // of failing the round: a member without a ref or a name (or with a repeated ref), a ref that names no
+        // member, an unknown role or flow type, and anything that isn't an icon key.
 
-            // QuestionValidator.ValidateReview checks the index range and feedback counts against the question.
-            return new AnswerReview
+        static IReadOnlyList<CastMember> ToCast(GameCastMemberDto[] dtos)
+        {
+            var cast = new List<CastMember>();
+            var refs = new HashSet<string>();
+            foreach (var dto in dtos ?? Array.Empty<GameCastMemberDto>())
             {
-                AnsweredIndex = result.answer_index,
-                CorrectIndex = result.correct_index,
-                Original = ToPromptReview(result.original),
-                Resolution = ToResolution(result.resolution, result.correct_index),
-                // The backend sends it only for a wrong answer; never show one next to a correct answer.
-                Misconception = result.is_correct ? string.Empty : result.misconception?.Trim() ?? string.Empty,
-                Outcome = result.outcome?.Trim() ?? string.Empty,
-            };
-        }
-
-        /// <exception cref="FormatException">The response is for another question.</exception>
-        public static FiftyFiftyResult ToFiftyFifty(GameFiftyFiftyResultDto result, string questionId)
-        {
-            if (result == null)
-                throw new FormatException($"Question {questionId}: the 50/50 response is empty.");
-            if (result.question_id != questionId)
-                throw new FormatException($"Question {questionId}: the 50/50 response is for question {result.question_id}.");
-            // QuestionValidator.ValidateFiftyFifty checks the indices and the count against the question.
-            return new FiftyFiftyResult(result.eliminated_indices ?? Array.Empty<int>(), result.fifty_fifty_remaining);
-        }
-
-        static QuestionPrompt ToPrompt(GameQuestionDto dto)
-        {
-            var answers = (dto.answers ?? Array.Empty<GameAnswerDto>())
-                .Where(answer => answer != null)
-                .OrderBy(answer => answer.index)
-                .ToArray();
-            for (var i = 0; i < answers.Length; i++)
-            {
-                if (answers[i].index != i)
-                    throw new FormatException($"Question {dto.id}: answer indices are not 0..{answers.Length - 1}.");
-            }
-
-            return new QuestionPrompt
-            {
-                Question = dto.question,
-                Answers = answers.Select(answer => answer.text ?? string.Empty).ToArray(),
-                Entities = ToEntities(dto.entities, answers.Length),
-            };
-        }
-
-        /// <summary>
-        /// Entities only decorate a question, so bad ones are dropped instead of failing the round: an entity
-        /// without a name or with an unknown kind, the answers' entities and icons when they don't line up with the
-        /// answers, and anything that isn't an icon key.
-        /// </summary>
-        static PromptEntities ToEntities(GameEntitiesDto dto, int answerCount)
-        {
-            if (dto == null)
-                return PromptEntities.Empty;
-
-            var question = ToEntityList(dto.question);
-            var questionIcon = EntityIconResolver.CleanKey(dto.question_icon);
-            var aligned = dto.answers != null && dto.answers.Length == answerCount;
-            var answers = aligned
-                ? dto.answers.Select(answer => ToEntityList(answer?.entities)).ToArray()
-                : Array.Empty<IReadOnlyList<VisualEntity>>();
-            var answerIcons = aligned
-                ? dto.answers.Select(answer => EntityIconResolver.CleanKey(answer?.icon)).ToArray()
-                : Array.Empty<string>();
-            if (answerIcons.All(icon => icon == null))
-                answerIcons = Array.Empty<string>();
-            if (question.Count == 0 && answers.All(list => list.Count == 0) && questionIcon == null && answerIcons.Length == 0)
-                return PromptEntities.Empty;
-            return new PromptEntities { QuestionIcon = questionIcon, Question = question, Answers = answers, AnswerIcons = answerIcons };
-        }
-
-        static IReadOnlyList<VisualEntity> ToEntityList(GameEntityDto[] dtos)
-        {
-            if (dtos == null || dtos.Length == 0)
-                return Array.Empty<VisualEntity>();
-
-            var entities = new List<VisualEntity>(dtos.Length);
-            foreach (var dto in dtos)
-            {
-                if (dto == null || string.IsNullOrWhiteSpace(dto.name) || !TryParseKind(dto.kind, out var kind))
+                var reference = dto?.@ref?.Trim();
+                if (string.IsNullOrEmpty(reference) || string.IsNullOrWhiteSpace(dto.name) || !refs.Add(reference))
                     continue;
-                entities.Add(new VisualEntity
+                cast.Add(new CastMember
                 {
+                    Ref = reference,
                     Name = dto.name.Trim(),
-                    Kind = kind,
-                    Aliases = (dto.aliases ?? Array.Empty<string>())
-                        .Where(alias => !string.IsNullOrWhiteSpace(alias))
-                        .Select(alias => alias.Trim())
-                        .ToArray(),
+                    Type = ToCastType(dto.type),
+                    Aliases = CleanList(dto.aliases),
                     Icon = EntityIconResolver.CleanKey(dto.icon),
-                    Ref = dto.@ref?.Trim() ?? string.Empty,
+                    InScene = dto.scene,
                 });
             }
-            return entities;
+            return cast;
         }
 
-        static bool TryParseKind(string value, out EntityKind kind)
-        {
-            switch (value)
-            {
-                case "actor": kind = EntityKind.Actor; return true;
-                case "object": kind = EntityKind.Object; return true;
-                case "action": kind = EntityKind.Action; return true;
-                default: kind = default; return false;
-            }
-        }
-
-        // Parts, flows and resolutions only explain a question, so, like entities, bad pieces are dropped
-        // instead of failing the round.
-
-        static IReadOnlyList<QuestionPart> ToParts(GamePartDto[] dtos)
+        static IReadOnlyList<QuestionPart> ToBriefing(GamePartDto[] dtos, HashSet<string> refs)
         {
             var parts = new List<QuestionPart>();
             foreach (var dto in dtos ?? Array.Empty<GamePartDto>())
             {
-                if (dto == null || string.IsNullOrWhiteSpace(dto.text) || !TryParsePartRole(dto.role, out var role))
+                // The ask has a field of its own; one in the briefing would show twice.
+                if (dto == null || string.IsNullOrWhiteSpace(dto.text) || !TryParsePartRole(dto.role, out var role)
+                    || role == PartRole.Ask)
                     continue;
-                parts.Add(new QuestionPart { Role = role, Text = dto.text.Trim(), EntityRefs = CleanList(dto.entity_ids) });
+                parts.Add(new QuestionPart { Role = role, Text = dto.text.Trim(), EntityRefs = KnownRefs(dto.entity_ids, refs) });
             }
             return parts;
+        }
+
+        static QuestionPart ToAsk(GameAskDto dto, HashSet<string> refs) =>
+            string.IsNullOrWhiteSpace(dto?.text)
+                ? null
+                : new QuestionPart { Role = PartRole.Ask, Text = dto.text.Trim(), EntityRefs = KnownRefs(dto.entity_ids, refs) };
+
+        static IReadOnlyList<QuestionAction> ToActions(GameActionDto[] dtos, HashSet<string> refs)
+        {
+            var actions = new List<QuestionAction>();
+            foreach (var dto in dtos ?? Array.Empty<GameActionDto>())
+            {
+                if (dto == null || string.IsNullOrWhiteSpace(dto.name))
+                    continue;
+                actions.Add(new QuestionAction
+                {
+                    Ref = dto.@ref?.Trim() ?? string.Empty,
+                    Name = dto.name.Trim(),
+                    Sequence = dto.sequence,
+                    ActorRef = KnownRef(dto.actor, refs),
+                    TargetRef = KnownRef(dto.target, refs),
+                    InputRefs = KnownRefs(dto.inputs, refs),
+                    OutputRefs = KnownRefs(dto.outputs, refs),
+                    Icon = EntityIconResolver.CleanKey(dto.icon),
+                });
+            }
+            // Ordered by sequence; an action without one (0) goes last, in the order it came.
+            return actions.OrderBy(action => action.Sequence <= 0 ? int.MaxValue : action.Sequence).ToArray();
         }
 
         /// <summary>
         /// Drops nodes without a unique id or a known type, and edges that don't join two kept nodes or have an
         /// unknown type. An unknown status counts as <see cref="FlowStatus.Unknown"/>.
         /// </summary>
-        static DecisionFlow ToFlow(GameFlowDto dto)
+        static DecisionFlow ToFlow(GameFlowDto dto, HashSet<string> refs)
         {
             if (dto?.nodes == null || dto.nodes.Length == 0)
                 return DecisionFlow.Empty;
@@ -302,7 +221,7 @@ namespace ExamCards.Exam.Api
                     Id = id,
                     Type = type,
                     Label = node.label?.Trim() ?? string.Empty,
-                    EntityRefs = CleanList(node.entity_ids),
+                    EntityRefs = refs == null ? CleanList(node.entity_ids) : KnownRefs(node.entity_ids, refs),
                     ConditionId = node.condition_id?.Trim() ?? string.Empty,
                     Status = ToStatus(node.source_status),
                     IsQuestion = node.is_question,
@@ -342,59 +261,131 @@ namespace ExamCards.Exam.Api
             };
         }
 
-        /// <summary>
-        /// Drops options with a negative or repeated index or an unknown verdict, and all of them if a verdict
-        /// contradicts <paramref name="correctIndex"/>: reasons that disagree with the key would mislead.
-        /// An option for an answer the question doesn't have is harmless, since the screen asks by index.
-        /// </summary>
-        static Resolution ToResolution(GameResolutionDto dto, int correctIndex)
+        /// <param name="answerIndex">The answer sent; null for a recorded answer, which may be any.</param>
+        /// <exception cref="FormatException">The response is for another answer, incomplete, or contradicts itself.</exception>
+        public static AnswerReview ToReview(GameCardAnswerResultDto result, string questionId, int? answerIndex)
         {
-            if (dto == null)
-                return Resolution.Empty;
+            if (result == null)
+                throw new FormatException($"Question {questionId}: the answer response is empty.");
+            if (result.question_id != questionId || (answerIndex.HasValue && result.answer_index != answerIndex.Value))
+                throw new FormatException($"Question {questionId}: the answer response is for question {result.question_id}, answer {result.answer_index}.");
+            if (result.is_correct != (result.correct_index == result.answer_index))
+                throw new FormatException($"Question {questionId}: the answer response contradicts itself about the correct answer.");
+            // JsonUtility fills a missing field with its default (correct_index 0, empty review) instead of failing,
+            // and every playable question has at least two answers, so an empty feedback list means a missing review.
+            if (result.review?.feedbacks == null || result.review.feedbacks.Length == 0)
+                throw new FormatException($"Question {questionId}: the answer response has no review.");
 
-            var options = new List<OptionEvaluation>();
-            var indices = new HashSet<int>();
-            foreach (var option in dto.options ?? Array.Empty<OptionEvaluationDto>())
+            // QuestionValidator.ValidateReview checks the index range and feedback counts against the question.
+            var resolution = new Resolution
             {
-                if (option == null || option.index < 0 || !indices.Add(option.index))
+                AnswerRequirements = CleanList(result.answer_requirements),
+                // The cast isn't in the answer; the question's own flow already had its refs cleaned.
+                Flow = ToFlow(result.resolution_flow, null),
+                Options = ToOutcomes(result),
+                Rule = result.rule?.Trim() ?? string.Empty,
+            };
+            return new AnswerReview
+            {
+                AnsweredIndex = result.answer_index,
+                CorrectIndex = result.correct_index,
+                Review = new PromptReview
+                {
+                    Explanation = result.review.explanation ?? string.Empty,
+                    Feedbacks = result.review.feedbacks.Select(feedback => feedback ?? string.Empty).ToArray(),
+                },
+                Resolution = resolution.IsEmpty ? Resolution.Empty : resolution,
+                StoryLine = result.story_line?.Trim() ?? string.Empty,
+            };
+        }
+
+        /// <summary>
+        /// Every answer's outcome, or only the answer's own from a backend that sends no list. Drops outcomes with
+        /// a negative or repeated index or an unknown verdict, and all of them if a verdict contradicts
+        /// <c>correct_index</c>: reasons that disagree with the key would mislead. One for an answer the
+        /// question doesn't have is harmless, since the screen asks by index.
+        /// </summary>
+        static IReadOnlyList<AnswerOutcome> ToOutcomes(GameCardAnswerResultDto result)
+        {
+            var dtos = result.outcomes != null && result.outcomes.Length > 0
+                ? result.outcomes
+                : result.outcome != null && !string.IsNullOrEmpty(result.outcome.verdict)
+                    ? new[] { result.outcome }
+                    : Array.Empty<GameOutcomeDto>();
+
+            var outcomes = new List<AnswerOutcome>();
+            var indices = new HashSet<int>();
+            foreach (var dto in dtos)
+            {
+                if (dto == null || dto.index < 0 || !indices.Add(dto.index))
                     continue;
                 bool isCorrect;
-                if (option.verdict == "correct")
+                if (dto.verdict == "correct")
                     isCorrect = true;
-                else if (option.verdict == "incorrect")
+                else if (dto.verdict == "incorrect")
                     isCorrect = false;
                 else
                     continue;
-                if (isCorrect != (option.index == correctIndex))
+                if (isCorrect != (dto.index == result.correct_index))
+                    return Array.Empty<AnswerOutcome>();
+                outcomes.Add(new AnswerOutcome
                 {
-                    options.Clear();
-                    break;
-                }
-                options.Add(new OptionEvaluation
-                {
-                    Index = option.index,
+                    Index = dto.index,
                     IsCorrect = isCorrect,
-                    SupportedRequirements = CleanList(option.supported_requirements),
-                    Gaps = CleanList(option.gaps),
-                    Reason = option.reason?.Trim() ?? string.Empty,
+                    Impact = ToImpact(dto.impact, isCorrect),
+                    Consequence = dto.consequence?.Trim() ?? string.Empty,
+                    // Never shown next to a correct answer.
+                    Misconception = isCorrect ? string.Empty : dto.misconception?.Trim() ?? string.Empty,
+                    Reason = dto.reason?.Trim() ?? string.Empty,
+                    SupportedRequirements = CleanList(dto.supported_requirements),
+                    Gaps = CleanList(dto.gaps),
                 });
             }
-
-            var resolution = new Resolution
-            {
-                AnswerRequirements = CleanList(dto.answer_requirements),
-                Flow = ToFlow(dto.flow),
-                Options = options,
-                Rule = dto.rule?.Trim() ?? string.Empty,
-            };
-            return resolution.IsEmpty ? Resolution.Empty : resolution;
+            return outcomes;
         }
+
+        /// <summary>The impact the verdict allows: a correct answer is a success, a wrong one partial or a failure.</summary>
+        static AnswerImpact ToImpact(string value, bool isCorrect) =>
+            isCorrect ? AnswerImpact.Success
+            : value == "partial" ? AnswerImpact.Partial
+            : AnswerImpact.Failure;
+
+        /// <exception cref="FormatException">The response is for another question.</exception>
+        public static FiftyFiftyResult ToFiftyFifty(GameFiftyFiftyResultDto result, string questionId)
+        {
+            if (result == null)
+                throw new FormatException($"Question {questionId}: the 50/50 response is empty.");
+            if (result.question_id != questionId)
+                throw new FormatException($"Question {questionId}: the 50/50 response is for question {result.question_id}.");
+            // QuestionValidator.ValidateFiftyFifty checks the indices and the count against the question.
+            return new FiftyFiftyResult(result.eliminated_indices ?? Array.Empty<int>(), result.fifty_fifty_remaining);
+        }
+
+        static string KnownRef(string value, HashSet<string> refs)
+        {
+            var reference = value?.Trim();
+            return !string.IsNullOrEmpty(reference) && refs.Contains(reference) ? reference : string.Empty;
+        }
+
+        static IReadOnlyList<string> KnownRefs(string[] values, HashSet<string> refs) =>
+            CleanList(values).Where(refs.Contains).Distinct().ToArray();
 
         static IReadOnlyList<string> CleanList(string[] values) =>
             (values ?? Array.Empty<string>())
                 .Where(value => !string.IsNullOrWhiteSpace(value))
                 .Select(value => value.Trim())
                 .ToArray();
+
+        static CastType ToCastType(string value) => value switch
+        {
+            "actor" => CastType.Actor,
+            "system" => CastType.System,
+            "knowledge_source" => CastType.KnowledgeSource,
+            "artifact" => CastType.Artifact,
+            "external_service" => CastType.ExternalService,
+            "concept" => CastType.Concept,
+            _ => CastType.Object,
+        };
 
         static bool TryParsePartRole(string value, out PartRole role)
         {
@@ -445,11 +436,5 @@ namespace ExamCards.Exam.Api
             value == "explicit" ? FlowStatus.Explicit
             : value == "inferred" ? FlowStatus.Inferred
             : FlowStatus.Unknown;
-
-        static PromptReview ToPromptReview(GameReviewDto dto) => new PromptReview
-        {
-            Explanation = dto?.explanation ?? string.Empty,
-            Feedbacks = (dto?.feedbacks ?? Array.Empty<string>()).Select(feedback => feedback ?? string.Empty).ToArray(),
-        };
     }
 }

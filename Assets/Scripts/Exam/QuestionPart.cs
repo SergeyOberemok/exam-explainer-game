@@ -24,13 +24,13 @@ namespace ExamCards.Exam
         /// <summary>A condition the scenario states, which an answer has to respect.</summary>
         Constraint,
 
-        /// <summary>The question itself, word for word; the last part.</summary>
+        /// <summary>The question itself, word for word (<see cref="Question.Ask"/>).</summary>
         Ask,
     }
 
     /// <summary>
-    /// One piece of an original question, as the backend's decomposition splits it: the scenario's facts in
-    /// order, then the ask. Never names an entity only an answer names, so it gives nothing away.
+    /// One piece of an original question, as the backend's decomposition splits it: a briefing item (one of the
+    /// scenario's facts) or the ask. Never names an entity only an answer names, so it gives nothing away.
     /// </summary>
     [Serializable]
     public sealed class QuestionPart
@@ -38,7 +38,7 @@ namespace ExamCards.Exam
         public PartRole Role { get; set; }
         public string Text { get; set; }
 
-        /// <summary>The <see cref="VisualEntity.Ref"/>s of the entities the part names.</summary>
+        /// <summary>The <see cref="CastMember.Ref"/>s of the cast members the part names.</summary>
         public IReadOnlyList<string> EntityRefs { get; set; } = Array.Empty<string>();
     }
 }

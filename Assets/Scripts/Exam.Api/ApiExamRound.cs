@@ -35,17 +35,17 @@ namespace ExamCards.Exam.Api
             CancellationToken cancellationToken = default)
         {
             var request = new GameAnswerRequestDto { question_id = questionId, answer_index = answerIndex };
-            GameAnswerResultDto result;
+            GameCardAnswerResultDto result;
             try
             {
-                result = await _client.PostAsync<GameAnswerResultDto>(_roundPath + "/answers", request, true,
+                result = await _client.PostAsync<GameCardAnswerResultDto>(_roundPath + "/answers", request, true,
                     cancellationToken);
             }
             catch (ApiException e) when (e.Code == ApiErrorCodes.AlreadyAnswered)
             {
                 // An earlier answer reached the server but its response was lost: that answer counts. Read it, so the
                 // question shows its result instead of refusing every other card.
-                var recorded = await _client.GetAsync<GameAnswerResultDto>(
+                var recorded = await _client.GetAsync<GameCardAnswerResultDto>(
                     _roundPath + "/answers/" + Uri.EscapeDataString(questionId), cancellationToken);
                 return GameQuestionMapper.ToReview(recorded, questionId, null);
             }
@@ -63,7 +63,7 @@ namespace ExamCards.Exam.Api
         public async Task<Question> AddQuestionAsync(string questionId, CancellationToken cancellationToken = default)
         {
             var request = new GameRoundQuestionRequestDto { question_id = questionId };
-            var result = await _client.PostAsync<GameRoundQuestionDto>(_roundPath + "/questions", request, true,
+            var result = await _client.PostAsync<GameCardRoundQuestionDto>(_roundPath + "/questions", request, true,
                 cancellationToken);
             return GameQuestionMapper.ToAddedQuestion(result, questionId);
         }
@@ -72,7 +72,7 @@ namespace ExamCards.Exam.Api
         {
             var batchIndex = _nextBatch;
             var request = new GameRoundBatchRequestDto { batch_index = batchIndex, count = _batchSize };
-            var result = await _client.PostAsync<GameRoundBatchDto>(_roundPath + "/batches", request, true,
+            var result = await _client.PostAsync<GameCardBatchDto>(_roundPath + "/batches", request, true,
                 cancellationToken);
             var questions = GameQuestionMapper.BuildBatch(result, batchIndex);
             // An empty batch isn't stored on the server, so only a full one moves to the next index.

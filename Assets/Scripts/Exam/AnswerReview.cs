@@ -2,7 +2,7 @@ using System;
 
 namespace ExamCards.Exam
 {
-    /// <summary>The outcome of answering a question: the correct answer, its review and resolution.</summary>
+    /// <summary>What answering a question reveals: the correct answer, the review, and every answer's outcome.</summary>
     [Serializable]
     public sealed class AnswerReview
     {
@@ -12,39 +12,35 @@ namespace ExamCards.Exam
         /// </summary>
         public int? AnsweredIndex { get; set; }
 
-        /// <summary>Index of the correct answer; the same for both versions of the text.</summary>
         public int CorrectIndex { get; set; }
 
-        /// <summary>
-        /// Feedback per answer and the explanation. The simplified text has no review of its own: its answers
-        /// are index-aligned with the original's, so this one fits both.
-        /// </summary>
-        public PromptReview Original { get; set; }
+        /// <summary>Feedback per answer and the explanation.</summary>
+        public PromptReview Review { get; set; }
 
-        /// <summary>Why the correct answer is correct, answer by answer; <see cref="Exam.Resolution.Empty"/> when the backend has none.</summary>
+        /// <summary>Requirements, outcomes per answer, the resolved flow and the rule; <see cref="Exam.Resolution.Empty"/> when the backend has none.</summary>
         public Resolution Resolution { get; set; } = Resolution.Empty;
 
         /// <summary>
-        /// What the answer that counts suggests the player got wrong, in one sentence. Empty for the correct
-        /// answer and when the backend has nothing to say about that answer.
+        /// The chapter's story line after the answer that counts (its win or fail line). Empty when the backend
+        /// has no story for the question.
         /// </summary>
-        public string Misconception { get; set; } = string.Empty;
+        public string StoryLine { get; set; } = string.Empty;
 
-        /// <summary>
-        /// One story line on what the answer that counts leads to in the question's chapter. Empty when the
-        /// backend has no story for the question.
-        /// </summary>
-        public string Outcome { get; set; } = string.Empty;
+        /// <returns>
+        /// What answer <paramref name="index"/> suggests the player got wrong; empty for the correct answer and
+        /// when the backend has nothing to say about it.
+        /// </returns>
+        public string MisconceptionFor(int index) =>
+            index == CorrectIndex ? string.Empty : Resolution.ForAnswer(index)?.Misconception ?? string.Empty;
 
-        /// <summary>A copy that records <paramref name="answeredIndex"/> as the answer.</summary>
-        public AnswerReview WithAnsweredIndex(int answeredIndex) => new AnswerReview
+        /// <summary>A copy that records <paramref name="answeredIndex"/> as the answer, with its story line.</summary>
+        public AnswerReview WithAnsweredIndex(int answeredIndex, string storyLine) => new AnswerReview
         {
             AnsweredIndex = answeredIndex,
             CorrectIndex = CorrectIndex,
-            Original = Original,
+            Review = Review,
             Resolution = Resolution,
-            Misconception = Misconception,
-            Outcome = Outcome,
+            StoryLine = storyLine ?? string.Empty,
         };
     }
 }

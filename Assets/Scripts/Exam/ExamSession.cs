@@ -98,7 +98,7 @@ namespace ExamCards.Exam
         /// <summary>True if 50/50 can be used on the current question right now.</summary>
         public bool CanEliminate =>
             !IsBusy && !IsFinished && !IsCurrentAnswered && !IsCurrentEliminated && FiftyFiftyRemaining > 0
-            && Current.Original.Answers.Count - 1 >= EliminatedPerUse;
+            && Current.Answers.Count - 1 >= EliminatedPerUse;
 
         /// <summary>Lives left. The exam ends after the current question when this reaches 0.</summary>
         public int Lives { get; private set; } = MaxLives;
@@ -115,22 +115,12 @@ namespace ExamCards.Exam
         public AnswerReview CurrentReview { get; private set; }
 
         public bool IsCurrentAnswered => AnsweredIndex.HasValue;
-        public bool IsCurrentRevealed { get; private set; }
 
         /// <summary>True once <see cref="MoveNext"/> has been called on the last question.</summary>
         public bool IsFinished { get; private set; }
 
         /// <summary>How many questions have been answered so far, including the current one.</summary>
         public int AnsweredCount => CurrentIndex + (IsCurrentAnswered ? 1 : 0);
-
-        /// <summary>The text to display: the simplified version once revealed, otherwise the original.</summary>
-        public QuestionPrompt CurrentPrompt => IsCurrentRevealed ? Current.Simplified : Current.Original;
-
-        /// <summary>
-        /// Feedback and explanation for <see cref="CurrentPrompt"/>; null until answered. Both texts share the
-        /// original's review, since their answers are index-aligned.
-        /// </summary>
-        public PromptReview CurrentPromptReview => CurrentReview?.Original;
 
         /// <summary>
         /// Answers the current question. If the request fails, nothing changes and the player can answer again.
@@ -141,7 +131,7 @@ namespace ExamCards.Exam
         public async Task<AnswerResult> AnswerAsync(int optionIndex, CancellationToken cancellationToken = default)
         {
             var question = Current;
-            if (optionIndex < 0 || optionIndex >= question.Original.Answers.Count)
+            if (optionIndex < 0 || optionIndex >= question.Answers.Count)
                 throw new ArgumentOutOfRangeException(nameof(optionIndex));
             if (IsFinished)
                 throw new InvalidOperationException("The exam is finished.");
@@ -204,27 +194,6 @@ namespace ExamCards.Exam
             FiftyFiftyRemaining = result.Remaining;
             return true;
         }
-
-        /// <summary>Switches the current question to its simplified text. Returns false if nothing changed.</summary>
-        public bool Reveal()
-        {
-            if (IsFinished || IsCurrentRevealed || !Current.CanReveal)
-                return false;
-            IsCurrentRevealed = true;
-            return true;
-        }
-
-        /// <summary>Switches the current question back to its original text. Returns false if nothing changed.</summary>
-        public bool ShowOriginal()
-        {
-            if (IsFinished || !IsCurrentRevealed)
-                return false;
-            IsCurrentRevealed = false;
-            return true;
-        }
-
-        /// <summary>Toggles between the original and simplified text. Returns false if nothing changed.</summary>
-        public bool ToggleSimplified() => IsCurrentRevealed ? ShowOriginal() : Reveal();
 
         /// <summary>Advances to the next question. Returns false when the exam is over.</summary>
         /// <exception cref="InvalidOperationException">Unanswered, busy, or <see cref="NeedsMore"/> (load first).</exception>
@@ -302,14 +271,9 @@ namespace ExamCards.Exam
         /// added to the round and then counts towards the total. If the current question is unanswered, it is
         /// shown again right after; nothing about it is lost. If the request fails, nothing changes.
         /// </summary>
-        /// <param name="reveal">
-        /// Show the question's simplified text right away, if it has one. Ignored for the current question
-        /// (<see cref="PlayNowOutcome.AlreadyCurrent"/>), which keeps the text the player chose.
-        /// </param>
         /// <exception cref="InvalidOperationException">Finished, out of lives, or busy (see <see cref="CanPlayNow"/>).</exception>
         /// <exception cref="FormatException">The round returned a question that doesn't fit.</exception>
-        public async Task<PlayNowOutcome> PlayNowAsync(string questionId, bool reveal = false,
-            CancellationToken cancellationToken = default)
+        public async Task<PlayNowOutcome> PlayNowAsync(string questionId, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(questionId))
                 throw new ArgumentException("No question id.", nameof(questionId));
@@ -317,7 +281,7 @@ namespace ExamCards.Exam
                 throw new InvalidOperationException(IsBusy ? "A request is still running." : "The exam is over.");
 
             var index = IndexOf(questionId);
-            // Already on screen: the player keeps whichever text they chose for it.
+            // Already on screen: nothing to do.
             if (index == CurrentIndex)
                 return PlayNowOutcome.AlreadyCurrent;
             // Everything before the current question has been answered.
@@ -351,7 +315,6 @@ namespace ExamCards.Exam
                 CurrentIndex++;
             _questions.Insert(CurrentIndex, question);
             ResetCurrent();
-            IsCurrentRevealed = reveal && question.CanReveal;
             return PlayNowOutcome.Moved;
         }
 
@@ -359,7 +322,6 @@ namespace ExamCards.Exam
         {
             AnsweredIndex = null;
             CurrentReview = null;
-            IsCurrentRevealed = false;
         }
     }
 }

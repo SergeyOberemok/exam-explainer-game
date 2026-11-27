@@ -219,14 +219,14 @@ namespace ExamCards.UI
             });
             row.Add(meta);
 
-            row.Add(MakeLabel(Shorten(question.Original.Question, MaxQuestionPreview), "search-result__question"));
+            row.Add(MakeLabel(Shorten(question.OriginalText, MaxQuestionPreview), "search-result__question"));
 
             var answers = new VisualElement();
             answers.AddToClassList("search-result__answers");
-            for (var i = 0; i < question.Original.Answers.Count; i++)
+            for (var i = 0; i < question.Answers.Count; i++)
             {
                 var letter = (char)('A' + i);
-                answers.Add(MakeLabel($"{letter}  {Shorten(question.Original.Answers[i], MaxAnswerPreview)}",
+                answers.Add(MakeLabel($"{letter}  {Shorten(question.Answers[i], MaxAnswerPreview)}",
                     "search-result__answer"));
             }
             row.Add(answers);

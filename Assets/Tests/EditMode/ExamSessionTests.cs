@@ -9,10 +9,12 @@ namespace ExamCards.Exam.Tests
 {
     public class ExamSessionTests
     {
-        internal static QuestionPrompt MakePrompt(string text) => new QuestionPrompt
+        internal static AnswerTool[] MakeTools() => new[]
         {
-            Question = text,
-            Answers = new[] { "a", "b", "c", "d" },
+            new AnswerTool { Index = 0, Text = "a" },
+            new AnswerTool { Index = 1, Text = "b" },
+            new AnswerTool { Index = 2, Text = "c" },
+            new AnswerTool { Index = 3, Text = "d" },
         };
 
         internal static PromptReview MakeReview(string text) => new PromptReview
@@ -21,18 +23,18 @@ namespace ExamCards.Exam.Tests
             Feedbacks = new[] { "fa", "fb", "fc", "fd" },
         };
 
-        internal static KeyedQuestion MakeQuestion(int correctIndex, bool withSimplified = true) => new KeyedQuestion
+        internal static KeyedQuestion MakeQuestion(int correctIndex) => new KeyedQuestion
         {
             Question = new Question
             {
                 Id = Guid.NewGuid().ToString(),
-                Original = MakePrompt("original"),
-                Simplified = withSimplified ? MakePrompt("simplified") : null,
+                Text = "original",
+                Tools = MakeTools(),
             },
             Review = new AnswerReview
             {
                 CorrectIndex = correctIndex,
-                Original = MakeReview("original"),
+                Review = MakeReview("original"),
             },
         };
 
@@ -88,20 +90,15 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void Answer_SetsReview_AndBothTextsShareIt()
+        public void Answer_SetsReview()
         {
             var question = MakeQuestion(1);
             var session = MakeSession(question);
             Assert.IsNull(session.CurrentReview);
-            Assert.IsNull(session.CurrentPromptReview);
 
             Answer(session, 1);
-            Assert.AreSame(question.Review, session.CurrentReview);
-            Assert.AreSame(question.Review.Original, session.CurrentPromptReview);
-
-            // The simplified text has no review of its own; its answers line up with the original's.
-            session.Reveal();
-            Assert.AreSame(question.Review.Original, session.CurrentPromptReview);
+            Assert.AreEqual(1, session.CurrentReview.CorrectIndex);
+            Assert.AreSame(question.Review.Review, session.CurrentReview.Review);
         }
 
         [Test]
@@ -165,7 +162,7 @@ namespace ExamCards.Exam.Tests
             var session = new ExamSession(round);
 
             var pending = session.AnswerAsync(0);
-            round.Complete(new AnswerReview { CorrectIndex = 9, Original = MakeReview("x") });
+            round.Complete(new AnswerReview { CorrectIndex = 9, Review = MakeReview("x") });
 
             Assert.Throws<FormatException>(() => Run(pending));
             Assert.IsFalse(session.IsCurrentAnswered);
@@ -256,104 +253,9 @@ namespace ExamCards.Exam.Tests
         }
 
         [Test]
-        public void Reveal_AfterFinished_ReturnsFalse()
-        {
-            var session = MakeSession(MakeQuestion(0));
-            Answer(session, 0);
-            session.MoveNext();
-
-            Assert.IsFalse(session.Reveal());
-        }
-
-        [Test]
         public void Constructor_EmptyRound_Throws()
         {
             Assert.Throws<ArgumentException>(() => MakeSession());
-        }
-
-        [Test]
-        public void CurrentPrompt_BeforeReveal_IsOriginal()
-        {
-            var question = MakeQuestion(0);
-            var session = MakeSession(question);
-
-            Assert.IsFalse(session.IsCurrentRevealed);
-            Assert.AreSame(question.Question.Original, session.CurrentPrompt);
-        }
-
-        [Test]
-        public void Reveal_SwapsCurrentPromptToSimplified()
-        {
-            var question = MakeQuestion(0);
-            var session = MakeSession(question);
-
-            Assert.IsTrue(session.Reveal());
-
-            Assert.IsTrue(session.IsCurrentRevealed);
-            Assert.AreSame(question.Question.Simplified, session.CurrentPrompt);
-        }
-
-        [Test]
-        public void Reveal_Twice_ReturnsFalseAndStaysRevealed()
-        {
-            var question = MakeQuestion(0);
-            var session = MakeSession(question);
-            session.Reveal();
-
-            Assert.IsFalse(session.Reveal());
-            Assert.AreSame(question.Question.Simplified, session.CurrentPrompt);
-        }
-
-        [Test]
-        public void Reveal_AfterAnswering_WorksAndKeepsScore()
-        {
-            var question = MakeQuestion(1);
-            var session = MakeSession(question);
-            Answer(session, 1);
-
-            Assert.IsTrue(session.Reveal());
-
-            Assert.AreSame(question.Question.Simplified, session.CurrentPrompt);
-            Assert.IsTrue(session.IsCurrentAnswered);
-            Assert.AreEqual(1, session.Score);
-        }
-
-        [Test]
-        public void Reveal_BeforeAnswering_DoesNotChangeScoring()
-        {
-            var session = MakeSession(MakeQuestion(1));
-            session.Reveal();
-
-            var result = Answer(session, 1);
-
-            Assert.IsTrue(result.IsCorrect);
-            Assert.AreEqual(1, session.Score);
-        }
-
-        [Test]
-        public void MoveNext_ResetsReveal()
-        {
-            var second = MakeQuestion(0);
-            var session = MakeSession(MakeQuestion(0), second);
-            session.Reveal();
-            Answer(session, 0);
-
-            session.MoveNext();
-
-            Assert.IsFalse(session.IsCurrentRevealed);
-            Assert.AreSame(second.Question.Original, session.CurrentPrompt);
-        }
-
-        [Test]
-        public void Reveal_WithoutSimplifiedVersion_DoesNothing()
-        {
-            var question = MakeQuestion(0, withSimplified: false);
-            var session = MakeSession(question);
-
-            Assert.IsFalse(question.Question.CanReveal);
-            Assert.IsFalse(session.Reveal());
-            Assert.IsFalse(session.IsCurrentRevealed);
-            Assert.AreSame(question.Question.Original, session.CurrentPrompt);
         }
 
         [TestCase(0)]
@@ -482,7 +384,6 @@ namespace ExamCards.Exam.Tests
             var found = MakeQuestion(1);
             var session = new ExamSession(new LocalExamRound(new[] { skipped }, new Random(1), 2, new[] { found }));
             Eliminate(session);
-            session.Reveal();
             var eliminated = Enumerable.Range(0, 4).Where(session.IsEliminated).ToList();
 
             PlayNow(session, found.Question.Id);
@@ -490,7 +391,6 @@ namespace ExamCards.Exam.Tests
             Assert.AreEqual(0, session.CurrentIndex);
             Assert.AreSame(found.Question, session.Current);
             Assert.IsFalse(session.IsCurrentEliminated);
-            Assert.IsFalse(session.IsCurrentRevealed);
             Assert.AreEqual(0, session.AnsweredCount);
             Answer(session, 1);
             session.MoveNext();
@@ -532,44 +432,6 @@ namespace ExamCards.Exam.Tests
             Assert.AreEqual(PlayNowOutcome.AlreadyAnswered, PlayNow(session, a.Question.Id));
             Assert.AreSame(b.Question, session.Current);
             Assert.AreEqual(2, session.Total);
-        }
-
-        [Test]
-        public void PlayNow_WithReveal_ShowsTheSimplifiedTextWhenThereIsOne()
-        {
-            var first = MakeQuestion(0);
-            var found = MakeQuestion(1);
-            var plain = MakeQuestion(2, withSimplified: false);
-            var session = MakeSessionWithCatalog(new[] { first }, found, plain);
-            Answer(session, 0);
-
-            Assert.AreEqual(PlayNowOutcome.Moved, Run(session.PlayNowAsync(found.Question.Id, reveal: true)));
-            Assert.IsTrue(session.IsCurrentRevealed);
-            Assert.AreSame(found.Question.Simplified, session.CurrentPrompt);
-
-            // A question without a simplified version shows the original.
-            Assert.AreEqual(PlayNowOutcome.Moved, Run(session.PlayNowAsync(plain.Question.Id, reveal: true)));
-            Assert.AreSame(plain.Question, session.Current);
-            Assert.IsFalse(session.IsCurrentRevealed);
-        }
-
-        [Test]
-        public void PlayNow_WithoutReveal_ShowsTheOriginal_AndTheCurrentQuestionKeepsTheTextThePlayerChose()
-        {
-            var a = MakeQuestion(0);
-            var b = MakeQuestion(0);
-            var session = MakeSession(a, b);
-
-            Assert.AreEqual(PlayNowOutcome.Moved, PlayNow(session, b.Question.Id));
-            Assert.IsFalse(session.IsCurrentRevealed);
-
-            // The player chose the original for the question on screen; finding it again doesn't switch it.
-            Assert.AreEqual(PlayNowOutcome.AlreadyCurrent, Run(session.PlayNowAsync(b.Question.Id, reveal: true)));
-            Assert.IsFalse(session.IsCurrentRevealed);
-
-            session.Reveal();
-            Assert.AreEqual(PlayNowOutcome.AlreadyCurrent, Run(session.PlayNowAsync(b.Question.Id)));
-            Assert.IsTrue(session.IsCurrentRevealed);
         }
 
         [Test]

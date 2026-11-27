@@ -30,6 +30,12 @@ namespace ExamCards.Exam.Api
         /// under the request. Repeating such a request is safe only when the request is idempotent.
         /// </summary>
         public bool IsTransient => StatusCode == 0 || StatusCode >= 500 || Code == ApiErrorCodes.RoundChanged;
+
+        /// <summary>
+        /// True when the backend's rate limit refused the request (HTTP 429). Not transient: an immediate retry
+        /// would be refused too, so the player retries after a moment.
+        /// </summary>
+        public bool IsRateLimited => StatusCode == 429;
     }
 
     /// <summary>The backend's error codes the game reacts to (see the backend's <c>api/game/errors.py</c>).</summary>

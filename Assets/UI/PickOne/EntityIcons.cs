@@ -8,7 +8,7 @@ namespace ExamCards.UI
     /// <summary>
     /// Loads the picture of an icon key (see <see cref="EntityIconResolver"/>) from
     /// <c>Resources/EntityIcons/&lt;key&gt;</c>. A key the game doesn't ship, as after a backend catalog
-    /// change, falls back: an entity to the icon of its kind, anything else to the default icon.
+    /// change, falls back: a cast member to the icon of its type, anything else to the default icon.
     /// </summary>
     public static class EntityIcons
     {
@@ -16,10 +16,10 @@ namespace ExamCards.UI
 
         static readonly Dictionary<string, VectorImage> Cache = new Dictionary<string, VectorImage>();
 
-        public static VectorImage For(VisualEntity entity)
+        public static VectorImage For(CastMember member)
         {
-            var icon = Load(EntityIconResolver.Resolve(entity));
-            return icon != null ? icon : Load(EntityIconResolver.KindIcon(entity.Kind));
+            var icon = Load(EntityIconResolver.Resolve(member));
+            return icon != null ? icon : Load(EntityIconResolver.TypeIcon(member.Type));
         }
 
         /// <returns>The picture for a question's or an answer's key; the default one when the key is null or doesn't ship.</returns>

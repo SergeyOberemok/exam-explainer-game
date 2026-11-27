@@ -15,13 +15,16 @@ namespace ExamCards.Exam
             if (question == null || string.IsNullOrEmpty(question.Id))
                 throw new FormatException("A question has no id.");
 
-            ValidatePrompt(question.Id, question.Original);
-            if (question.Simplified == null)
-                return;
-
-            ValidatePrompt(question.Id, question.Simplified);
-            if (question.Simplified.Answers.Count != question.Original.Answers.Count)
-                throw new FormatException($"Question {question.Id}: simplified version has a different number of answers.");
+            var count = question.Answers.Count;
+            if (count == 0)
+                throw new FormatException($"Question {question.Id}: no answers.");
+            if (count > Question.MaxAnswers)
+                throw new FormatException($"Question {question.Id}: {count} answers, but at most {Question.MaxAnswers} are supported.");
+            for (var i = 0; i < count; i++)
+            {
+                if (question.Tools[i] == null || question.Tools[i].Index != i)
+                    throw new FormatException($"Question {question.Id}: answer indices are not 0..{count - 1}.");
+            }
         }
 
         /// <exception cref="FormatException">The review doesn't fit the question.</exception>
@@ -30,13 +33,13 @@ namespace ExamCards.Exam
             if (review == null)
                 throw new FormatException($"Question {question.Id}: the answer came back without a review.");
 
-            var count = question.Original.Answers.Count;
+            var count = question.Answers.Count;
             if (review.CorrectIndex < 0 || review.CorrectIndex >= count)
                 throw new FormatException($"Question {question.Id}: invalid correct answer {review.CorrectIndex}.");
             if (review.AnsweredIndex is int answered && (answered < 0 || answered >= count))
                 throw new FormatException($"Question {question.Id}: invalid recorded answer {answered}.");
 
-            ValidatePromptReview(question.Id, review.Original, count);
+            ValidatePromptReview(question.Id, review.Review, count);
         }
 
         /// <exception cref="FormatException">The indices aren't distinct answers, would remove every answer, or the
@@ -53,7 +56,7 @@ namespace ExamCards.Exam
         /// <exception cref="FormatException">The indices aren't distinct answers, or would remove every answer.</exception>
         public static void ValidateEliminated(Question question, IReadOnlyList<int> eliminated)
         {
-            var count = question.Original.Answers.Count;
+            var count = question.Answers.Count;
             if (eliminated == null || eliminated.Count == 0)
                 throw new FormatException($"Question {question.Id}: 50/50 removed no answers.");
             if (eliminated.Count >= count)
@@ -65,14 +68,6 @@ namespace ExamCards.Exam
                 if (index < 0 || index >= count || !seen.Add(index))
                     throw new FormatException($"Question {question.Id}: 50/50 returned invalid answer {index}.");
             }
-        }
-
-        static void ValidatePrompt(string questionId, QuestionPrompt prompt)
-        {
-            if (prompt?.Answers == null || prompt.Answers.Count == 0)
-                throw new FormatException($"Question {questionId}: no answers.");
-            if (prompt.Answers.Count > Question.MaxAnswers)
-                throw new FormatException($"Question {questionId}: {prompt.Answers.Count} answers, but at most {Question.MaxAnswers} are supported.");
         }
 
         static void ValidatePromptReview(string questionId, PromptReview review, int answerCount)

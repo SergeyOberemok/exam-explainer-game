@@ -17,8 +17,6 @@ namespace ExamCards.Exam.Tests
     public class ContractTests
     {
         const string Q1 = "65f0000000000000000000a1";
-        const string Q2 = "65f0000000000000000000a2";
-        const string Q3 = "65f0000000000000000000a3";
 
         static string Contract(string name) =>
             File.ReadAllText(Path.Combine(Application.dataPath, "Tests", "EditMode", "Contract", name));
@@ -27,161 +25,116 @@ namespace ExamCards.Exam.Tests
 
         static T Run<T>(Task<T> task) => task.GetAwaiter().GetResult();
 
-        [Test]
-        public void Round_BuildsQuestionsWithTheirSimplifiedText()
-        {
-            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
+        static Question RoundQuestion() => GameQuestionMapper.BuildQuestions(Parse<GameCardRoundDto>("v2_round.json")).Single();
 
-            CollectionAssert.AreEqual(new[] { Q1, Q2 }, questions.Select(q => q.Id));
-            Assert.IsTrue(questions[0].CanReveal);
-            Assert.AreEqual("Where does the key go?", questions[0].Simplified.Question);
-            CollectionAssert.AreEqual(new[] { "Authorization", "x-api-key", "X-Key" }, questions[0].Original.Answers);
-            Assert.IsFalse(questions[1].CanReveal);
-        }
+        static Question AddedQuestion() =>
+            GameQuestionMapper.ToAddedQuestion(Parse<GameCardRoundQuestionDto>("v2_add_question.json"), Q1);
+
+        static Question SearchedQuestion() =>
+            GameQuestionMapper.ToSearchResults(Parse<GameCardListDto>("v2_search.json")).Single();
 
         [Test]
-        public void Objectives_ComeWithTaggedQuestions_AndAMisconceptionWithAWrongAnswer()
+        public void Round_Add_And_Search_AllBringTheSameCard()
         {
-            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
-            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
-
-            foreach (var tagged in new[] { questions[0], added })
+            foreach (var question in new[] { RoundQuestion(), AddedQuestion(), SearchedQuestion() })
             {
-                CollectionAssert.AreEqual(new[] { "tools-mcp-config", "tools-errors" }, tagged.Objectives);
-                Assert.AreEqual(2, tagged.Difficulty);
+                Assert.AreEqual(Q1, question.Id);
+                CollectionAssert.AreEqual(new[] { "Authorization", "x-api-key", "X-Key" }, question.Answers);
+                Assert.AreEqual("Send the key in its own header", question.Tools[1].Label);
+                Assert.AreEqual("api", question.Icon);
+                CollectionAssert.AreEqual(new[] { "credential", "parameter", "tags" }, question.Tools.Select(t => t.Icon));
             }
-            Assert.IsEmpty(questions[1].Objectives);
-            Assert.AreEqual(0, questions[1].Difficulty);
-
-            var wrong = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_wrong.json"), Q1, 2);
-            QuestionValidator.ValidateReview(questions[0], wrong);
-            Assert.AreEqual("Header names are free to choose.", wrong.Misconception);
-            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1).Misconception);
-            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0).Misconception);
         }
 
         [Test]
-        public void Story_ComesWithQuestionsOfAChapter_AndAnOutcomeWithTheirAnswers()
+        public void Card_HasTheStory_Objectives_AndTheStem()
         {
-            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
-            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+            var question = RoundQuestion();
 
-            foreach (var told in new[] { questions[0], added })
-            {
-                Assert.AreEqual("support", told.Scenario);
-                Assert.AreEqual("build", told.Stage);
-                Assert.AreEqual("The first API call of the support agent is refused.", told.Beat);
-                // The scenario paragraph stays in the original text; the stem is what the screen shows.
-                StringAssert.StartsWith("SCENARIO:", told.Original.Question);
-                Assert.AreEqual("Which header carries the API key?", told.OriginalText);
-            }
-            Assert.IsEmpty(questions[1].Scenario);
-            Assert.IsEmpty(questions[1].Beat);
-            Assert.AreEqual(questions[1].Original.Question, questions[1].OriginalText);
-
-            Assert.AreEqual("Every call still comes back unauthorized.",
-                GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_wrong.json"), Q1, 2).Outcome);
-            Assert.AreEqual("The agent reaches the API.",
-                GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1).Outcome);
-            Assert.IsEmpty(GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0).Outcome);
+            CollectionAssert.AreEqual(new[] { "tools-mcp-config", "tools-errors" }, question.Objectives);
+            Assert.AreEqual(2, question.Difficulty);
+            Assert.AreEqual("support", question.Scenario);
+            Assert.AreEqual("build", question.Stage);
+            Assert.AreEqual("The first API call of the support agent is refused.", question.Beat);
+            // The scenario paragraph stays in the whole text; the stem is what the screen shows.
+            StringAssert.StartsWith("SCENARIO:", question.Text);
+            Assert.AreEqual("Which header carries the API key?", question.OriginalText);
         }
 
         [Test]
-        public void Entities_ComeWithBothTexts()
+        public void Card_HasTheBriefingAskCastAndActions()
         {
-            var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
-            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+            var question = RoundQuestion();
 
-            foreach (var question in new[] { round[0], added })
-            {
-                foreach (var entities in new[] { question.Original.Entities, question.Simplified.Entities, question.Entities })
-                {
-                    CollectionAssert.AreEqual(new[] { "API Key", "Send Request" }, entities.Question.Select(e => e.Name));
-                    CollectionAssert.AreEqual(new[] { EntityKind.Object, EntityKind.Action }, entities.Question.Select(e => e.Kind));
-                    CollectionAssert.AreEqual(new[] { "key" }, entities.Question[0].Aliases);
-                    // The decomposition id that parts and flow nodes name (JSON key "ref").
-                    CollectionAssert.AreEqual(new[] { "e1", "" }, entities.Question.Select(e => e.Ref));
-                    Assert.AreEqual(3, entities.Answers.Count);
-                    Assert.AreEqual("x-api-key", entities.ForAnswer(1).Single().Name);
-                    Assert.AreEqual(0, entities.ForAnswer(2).Count);
+            Assert.AreEqual(PartRole.Context, question.Briefing.Single().Role);
+            Assert.AreEqual("A support agent calls the API.", question.Briefing[0].Text);
+            CollectionAssert.AreEqual(new[] { "e1" }, question.Briefing[0].EntityRefs);
+            Assert.AreEqual("Which header carries the API key?", question.Ask.Text);
 
-                    // Icons: null where the backend has none (or no longer has the stored key).
-                    Assert.AreEqual("credential", entities.QuestionIcon);
-                    CollectionAssert.AreEqual(new[] { "credential", "send" }, entities.Question.Select(e => e.Icon));
-                    CollectionAssert.AreEqual(new[] { "permission", null, "tags" }, entities.AnswerIcons);
-                    Assert.IsNull(entities.ForAnswer(0).Single().Icon);
-                    Assert.IsNull(entities.ForAnswer(1).Single().Icon);
-                }
-            }
-            Assert.IsTrue(round[1].Entities.IsEmpty);
+            CollectionAssert.AreEqual(new[] { "e1", "e2", "e3" }, question.Cast.Select(c => c.Ref));
+            Assert.AreEqual(CastType.Artifact, question.Cast[0].Type);
+            CollectionAssert.AreEqual(new[] { "key" }, question.Cast[0].Aliases);
+            Assert.AreEqual("API Key", question.SceneCast.Single().Name);
+            // Only answer B names x-api-key, so only its card shows it.
+            Assert.AreEqual("x-api-key", question.ToolCast(1).Single().Name);
+            Assert.IsEmpty(question.ToolCast(0));
+
+            var action = question.Actions.Single();
+            Assert.AreEqual("e1", action.TargetRef);
+            Assert.IsEmpty(action.ActorRef);
+            Assert.AreEqual(3, question.Flow.Nodes.Count);
         }
 
         [Test]
-        public void Parts_ComeWithTheOriginal_AndFlowsAreEmptyWithoutOne()
+        public void Answer_HasEveryOutcome_TheRequirementsAndTheStoryLine()
         {
-            var round = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
-            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
+            var question = RoundQuestion();
 
-            foreach (var question in new[] { round[0], added })
-            {
-                CollectionAssert.AreEqual(new[] { PartRole.Context, PartRole.Ask }, question.Parts.Select(p => p.Role));
-                Assert.AreEqual("A support agent calls the API.", question.Parts[0].Text);
-                CollectionAssert.AreEqual(new[] { "e1" }, question.Parts[0].EntityRefs);
-                Assert.AreEqual("Which header carries the API key?", question.Ask);
-                Assert.IsTrue(question.Flow.IsEmpty);
-            }
-            Assert.IsEmpty(round[1].Parts);
-            Assert.IsTrue(round[1].Flow.IsEmpty);
-        }
-
-        [Test]
-        public void Answers_MapToReviews()
-        {
-            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
-
-            var review = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer.json"), Q1, 1);
-            QuestionValidator.ValidateReview(questions[0], review);
+            var review = GameQuestionMapper.ToReview(Parse<GameCardAnswerResultDto>("v2_answer.json"), Q1, 1);
+            QuestionValidator.ValidateReview(question, review);
             Assert.AreEqual(1, review.CorrectIndex);
-            Assert.IsFalse(string.IsNullOrEmpty(review.Original.Explanation));
-            // The fixture question has no flow, so the backend sends no resolution either.
-            Assert.IsTrue(review.Resolution.IsEmpty);
+            Assert.IsFalse(string.IsNullOrEmpty(review.Review.Explanation));
+            Assert.AreEqual("The agent reaches the API.", review.StoryLine);
+            Assert.IsEmpty(review.MisconceptionFor(1));
 
-            var plain = GameQuestionMapper.ToReview(Parse<GameAnswerResultDto>("answer_no_simplified.json"), Q2, 0);
-            QuestionValidator.ValidateReview(questions[1], plain);
-            Assert.IsTrue(plain.Resolution.IsEmpty);
+            var resolution = review.Resolution;
+            CollectionAssert.AreEqual(new[] { AnswerImpact.Failure, AnswerImpact.Success, AnswerImpact.Partial },
+                resolution.Options.Select(o => o.Impact));
+            Assert.AreEqual("The review goes well.", resolution.ForAnswer(1).Consequence);
+            Assert.IsTrue(resolution.HasRequirementMatches);
+            Assert.AreEqual(1, resolution.MetCount(1));
+            Assert.AreEqual(0, resolution.MetCount(2));
+            Assert.AreEqual("Plan first when edits need review.", resolution.Rule);
+            Assert.IsTrue(resolution.Flow.Nodes.Any(n => n.Added));
+        }
+
+        [Test]
+        public void WrongAnswer_HasItsMisconceptionAndTheFailLine()
+        {
+            var question = RoundQuestion();
+
+            var wrong = GameQuestionMapper.ToReview(Parse<GameCardAnswerResultDto>("v2_answer_wrong.json"), Q1, 2);
+            QuestionValidator.ValidateReview(question, wrong);
+            Assert.AreEqual("Header names are free to choose.", wrong.MisconceptionFor(2));
+            Assert.AreEqual("Any HTTP auth header carries the key.", wrong.MisconceptionFor(0));
+            Assert.AreEqual("Every call still comes back unauthorized.", wrong.StoryLine);
+            Assert.AreEqual(AnswerImpact.Partial, wrong.Resolution.ForAnswer(2).Impact);
+            CollectionAssert.AreEqual(new[] { "Edits before review" }, wrong.Resolution.ForAnswer(2).Gaps);
         }
 
         [Test]
         public void FiftyFifty_MapsIndicesAndTheRoundsCount()
         {
-            var questions = GameQuestionMapper.BuildQuestions(Parse<GameRoundDto>("round.json"));
             var result = GameQuestionMapper.ToFiftyFifty(Parse<GameFiftyFiftyResultDto>("fifty_fifty.json"), Q1);
 
-            QuestionValidator.ValidateFiftyFifty(questions[0], result);
             Assert.AreEqual(1, result.Remaining);
             Assert.IsFalse(result.Eliminated.Contains(1));
         }
 
         [Test]
-        public void Batches_MapToQuestions_AndAnEmptyBatchToNone()
+        public void EmptyBatch_MapsToNone()
         {
-            var batch = GameQuestionMapper.BuildBatch(Parse<GameRoundBatchDto>("batch.json"), 1);
-            Assert.AreEqual(Q3, batch.Single().Id);
-            // Exam text keeps literal tags; the UI shows it without rich text.
-            Assert.AreEqual("<example>", batch[0].Original.Answers[0]);
-
-            Assert.AreEqual(0, GameQuestionMapper.BuildBatch(Parse<GameRoundBatchDto>("batch_empty.json"), 2).Count);
-        }
-
-        [Test]
-        public void AddQuestion_And_Search_Map()
-        {
-            var added = GameQuestionMapper.ToAddedQuestion(Parse<GameRoundQuestionDto>("add_question.json"), Q1);
-            Assert.IsTrue(added.CanReveal);
-
-            var results = GameQuestionMapper.ToSearchResults(Parse<GameQuestionListDto>("search.json"));
-            Assert.Greater(results.Count, 0);
-            Assert.IsTrue(results.All(q => !q.CanReveal));
+            Assert.AreEqual(0, GameQuestionMapper.BuildBatch(Parse<GameCardBatchDto>("v2_batch_empty.json"), 1).Count);
         }
 
         [Test]
@@ -204,9 +157,9 @@ namespace ExamCards.Exam.Tests
         public void LostAnswerResponse_RecoversFromTheRealBodies()
         {
             var transport = new FakeTransport()
-                .Reply(201, Contract("round.json"))
+                .Reply(201, Contract("v2_round.json"))
                 .Reply(409, Contract("error_already_answered.json"))
-                .Reply(200, Contract("answer.json"));
+                .Reply(200, Contract("v2_answer.json"));
             var round = Run(new ApiQuestionService("http://api.test", 10, 5, transport, retryDelaySeconds: 0f)
                 .StartRoundAsync());
             var session = new ExamSession(round);
@@ -217,6 +170,7 @@ namespace ExamCards.Exam.Tests
             Assert.AreEqual(1, result.AnsweredIndex);
             Assert.IsTrue(result.IsCorrect);
             Assert.AreEqual(1, session.Score);
+            Assert.AreEqual("The agent reaches the API.", session.CurrentReview.StoryLine);
         }
     }
 }

@@ -15,8 +15,8 @@ namespace ExamCards.Exam.Tests
             var round = new LocalExamRound(new[] { question });
             var id = question.Question.Id;
 
-            Assert.AreSame(question.Review, round.SubmitAnswerAsync(id, 2).Result);
-            Assert.AreSame(question.Review, round.SubmitAnswerAsync(id, 2).Result);
+            Assert.AreEqual(2, round.SubmitAnswerAsync(id, 2).Result.AnsweredIndex);
+            Assert.AreEqual(2, round.SubmitAnswerAsync(id, 2).Result.AnsweredIndex);
             var other = round.SubmitAnswerAsync(id, 1).Result;
             Assert.AreEqual(2, other.AnsweredIndex);
             Assert.AreEqual(question.Review.CorrectIndex, other.CorrectIndex);
@@ -38,7 +38,9 @@ namespace ExamCards.Exam.Tests
             Assert.IsFalse(round.HasMore);
             Assert.AreEqual(0, round.FetchMoreAsync().Result.Count);
             // Fetched questions can be answered in the round.
-            Assert.AreSame(more[3].Review, round.SubmitAnswerAsync(more[3].Question.Id, 0).Result);
+            var review = round.SubmitAnswerAsync(more[3].Question.Id, 0).Result;
+            Assert.AreSame(more[3].Review.Review, review.Review);
+            Assert.AreEqual(0, review.AnsweredIndex);
         }
 
         [Test]
@@ -86,7 +88,7 @@ namespace ExamCards.Exam.Tests
         public void Constructor_InconsistentReview_Throws()
         {
             var question = MakeQuestion();
-            question.Review.Original.Feedbacks = new[] { "only one" };
+            question.Review.Review.Feedbacks = new[] { "only one" };
 
             var e = Assert.Throws<FormatException>(() => new LocalExamRound(new[] { question }));
             StringAssert.Contains(question.Question.Id, e.Message);

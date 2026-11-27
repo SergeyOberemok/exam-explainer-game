@@ -40,7 +40,7 @@ namespace ExamCards.Exam
         public FlowNodeType Type { get; set; }
         public string Label { get; set; }
 
-        /// <summary>The <see cref="VisualEntity.Ref"/>s of the entities the node shows.</summary>
+        /// <summary>The <see cref="CastMember.Ref"/>s of the cast members the node shows.</summary>
         public IReadOnlyList<string> EntityRefs { get; set; } = Array.Empty<string>();
 
         public string ConditionId { get; set; } = string.Empty;

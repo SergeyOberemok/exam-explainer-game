@@ -15,7 +15,7 @@ namespace ExamCards.UI
         Eliminated,
     }
 
-    /// <summary>Binds one AnswerCard.uxml instance to the text of one answer.</summary>
+    /// <summary>Binds one AnswerCard.uxml instance to one answer: its text, icon, cast and, once answered, its outcome.</summary>
     public sealed class AnswerCardView
     {
         const string InteractiveClass = "answer-card--interactive";
@@ -23,9 +23,13 @@ namespace ExamCards.UI
         const string WrongClass = "answer-card--wrong";
         const string DimmedClass = "answer-card--dimmed";
         const string EliminatedClass = "answer-card--eliminated";
+        const string ImpactCardClass = "answer-card--impact-";
+        const string ImpactChipClass = "card__impact--";
         const string HiddenClass = "is-hidden";
 
-        /// <summary>The backend sends at most this many per answer.</summary>
+        static readonly AnswerImpact[] Impacts = { AnswerImpact.Success, AnswerImpact.Partial, AnswerImpact.Failure };
+
+        /// <summary>Answer-only cast members a card shows; more would crowd out the text.</summary>
         const int MaxEntities = 4;
 
         readonly VisualElement _card;
@@ -33,6 +37,10 @@ namespace ExamCards.UI
         readonly Label _letterBadge;
         readonly Label _answerText;
         readonly Label _feedbackText;
+        readonly VisualElement _outcomeSection;
+        readonly VisualElement _impactChip;
+        readonly Label _impactLabel;
+        readonly Label _consequenceText;
         readonly Label _reasonText;
         readonly Label _metText;
         readonly Label _gapsText;
@@ -51,6 +59,10 @@ namespace ExamCards.UI
             _letterBadge = root.Q<Label>("letterBadge");
             _answerText = root.Q<Label>("answerText");
             _feedbackText = root.Q<Label>("feedbackText");
+            _outcomeSection = root.Q("outcomeSection");
+            _impactChip = root.Q("impactChip");
+            _impactLabel = root.Q<Label>("impactLabel");
+            _consequenceText = root.Q<Label>("consequenceText");
             _reasonText = root.Q<Label>("reasonText");
             _metText = root.Q<Label>("metText");
             _gapsText = root.Q<Label>("gapsText");
@@ -71,37 +83,48 @@ namespace ExamCards.UI
         public int Index { get; }
 
         AnswerCardState _state;
-        bool _hasEvaluation;
+        AnswerOutcome _outcome;
 
-        /// <summary>Sets the text only, so a reveal can swap it without changing the card's state.</summary>
+        /// <summary>Sets the text only; doesn't change the card's state.</summary>
         public void Bind(string answerText, string feedbackText)
         {
+            if (_answerText.text != answerText)
+                _scroll.scrollOffset = Vector2.zero;
             _answerText.text = answerText;
             _feedbackText.text = feedbackText;
-            _scroll.scrollOffset = Vector2.zero;
         }
 
-        /// <summary>Shows the large icon for what the answer is about; null shows the default one.</summary>
+        /// <summary>Shows the large icon for what the answer proposes; null shows the default one.</summary>
         public void BindIcon(string iconKey) => EntityIcons.Show(_icon, iconKey);
 
-        /// <summary>Shows the answer's entity icons; null or empty hides them. Doesn't touch the card's state.</summary>
-        public void BindEntities(IReadOnlyList<VisualEntity> entities) => _entities.Bind(entities);
+        /// <summary>Shows the answer's cast chips; null or empty hides them. Doesn't touch the card's state.</summary>
+        public void BindEntities(IReadOnlyList<CastMember> members) => _entities.Bind(members);
 
         /// <summary>
-        /// Shows, once answered, why the answer is right or wrong, how many of the question's requirements it
-        /// meets and what it misses. With an evaluation these take the source feedback's place on the card (the
-        /// debrief lists that feedback); null keeps the feedback. Doesn't touch the card's state.
+        /// Shows, once answered, what the answer leads to (an impact chip and the story line), why it is right or
+        /// wrong, how many of the question's requirements it meets and what it misses. With an outcome these
+        /// take the source feedback's place on the card (the debrief lists that feedback); null keeps the
+        /// feedback. A partial answer also tints the card. Doesn't touch the card's state.
         /// </summary>
         /// <param name="met">Requirements the answer meets.</param>
-        /// <param name="total">Requirements of the question; 0 hides the count.</param>
-        public void BindResolution(OptionEvaluation option, int met, int total)
+        /// <param name="total">Requirements to count against; 0 hides the count.</param>
+        public void BindResolution(AnswerOutcome outcome, int met, int total)
         {
-            _hasEvaluation = option != null;
-            _reasonText.text = option?.Reason ?? string.Empty;
-            _metText.text = option == null || total == 0 ? string.Empty : $"Meets {met} of {total} requirements";
-            _gapsText.text = option == null || option.IsCorrect || option.Gaps.Count == 0
+            _outcome = outcome;
+            foreach (var impact in Impacts)
+            {
+                var name = ImpactName(impact);
+                var on = outcome != null && outcome.Impact == impact;
+                _card.EnableInClassList(ImpactCardClass + name, on);
+                _impactChip.EnableInClassList(ImpactChipClass + name, on);
+            }
+            _impactLabel.text = outcome == null ? string.Empty : ImpactText(outcome.Impact);
+            _consequenceText.text = outcome?.Consequence ?? string.Empty;
+            _reasonText.text = outcome?.Reason ?? string.Empty;
+            _metText.text = outcome == null || total == 0 ? string.Empty : $"Meets {met} of {total} requirements";
+            _gapsText.text = outcome == null || outcome.IsCorrect || outcome.Gaps.Count == 0
                 ? string.Empty
-                : "Missing: " + string.Join("; ", option.Gaps);
+                : "Missing: " + string.Join("; ", outcome.Gaps);
             UpdateReviewVisibility();
         }
 
@@ -119,23 +142,40 @@ namespace ExamCards.UI
             {
                 AnswerCardState.Eliminated => "Eliminated",
                 AnswerCardState.Correct => "Correct!",
-                AnswerCardState.Wrong => "Wrong",
+                AnswerCardState.Wrong => _outcome?.Impact == AnswerImpact.Partial ? "Partly works" : "Wrong",
                 AnswerCardState.Dimmed => "Not Selected",
                 _ => $"Select Card [{Index + 1}]",
             };
         }
 
+        static string ImpactName(AnswerImpact impact) => impact switch
+        {
+            AnswerImpact.Success => "success",
+            AnswerImpact.Partial => "partial",
+            _ => "failure",
+        };
+
+        static string ImpactText(AnswerImpact impact) => impact switch
+        {
+            AnswerImpact.Success => "WORKS",
+            AnswerImpact.Partial => "PARTLY WORKS",
+            _ => "FAILS",
+        };
+
         /// <summary>
-        /// Feedback (without an evaluation), reason, count and gaps show only once the question is answered, and
-        /// only when they have text.
+        /// The feedback (without an outcome) or the outcome shows only once the question is answered, and each
+        /// line only when it has text.
         /// </summary>
         void UpdateReviewVisibility()
         {
             var answered = _state != AnswerCardState.Interactive && _state != AnswerCardState.Eliminated;
-            _feedbackText.EnableInClassList(HiddenClass, !answered || _hasEvaluation || string.IsNullOrEmpty(_feedbackText.text));
-            _reasonText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_reasonText.text));
-            _metText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_metText.text));
-            _gapsText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_gapsText.text));
+            var hasOutcome = _outcome != null;
+            _feedbackText.EnableInClassList(HiddenClass, !answered || hasOutcome || string.IsNullOrEmpty(_feedbackText.text));
+            _outcomeSection.EnableInClassList(HiddenClass, !answered || !hasOutcome);
+            _consequenceText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_consequenceText.text));
+            _reasonText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_reasonText.text));
+            _metText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_metText.text));
+            _gapsText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_gapsText.text));
         }
     }
 }

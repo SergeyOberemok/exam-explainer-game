@@ -11,7 +11,7 @@ namespace ExamCards.Exam.Tests
     public class ApiExamRoundTests
     {
         const string BaseUrl = "http://api.test";
-        const string RoundUrl = BaseUrl + "/v1/game/rounds/r1";
+        const string RoundUrl = BaseUrl + "/v2/game/rounds/r1";
 
         static T Run<T>(Task<T> task) => task.GetAwaiter().GetResult();
 
@@ -113,9 +113,9 @@ namespace ExamCards.Exam.Tests
         static string Batch(int index, int remaining, params string[] ids)
         {
             var items = string.Join(",", Array.ConvertAll(ids, id =>
-                $"{{\"id\":\"{id}\",\"simplified\":false,\"section\":\"S\",\"assessment_type\":\"t\",\"question\":\"Q {id}\"," +
-                "\"answers\":[{\"index\":0,\"text\":\"A\"},{\"index\":1,\"text\":\"B\"}]}"));
-            return $"{{\"batch_index\":{index},\"items\":[{items}],\"simplified\":[],\"remaining\":{remaining}}}";
+                $"{{\"id\":\"{id}\",\"section\":\"S\",\"assessment_type\":\"t\",\"question\":\"Q {id}\"," +
+                "\"tools\":[{\"index\":0,\"text\":\"A\"},{\"index\":1,\"text\":\"B\"}]}"));
+            return $"{{\"batch_index\":{index},\"items\":[{items}],\"remaining\":{remaining}}}";
         }
 
         [Test]

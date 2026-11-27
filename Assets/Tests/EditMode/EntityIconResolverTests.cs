@@ -20,8 +20,8 @@ namespace ExamCards.Exam.Tests
             JsonUtility.FromJson<IconCatalogDto>(File.ReadAllText(
                 Path.Combine(Application.dataPath, "Tests", "EditMode", "Contract", "icon_catalog.json"))).keys;
 
-        static string Resolve(string icon, EntityKind kind = EntityKind.Object) =>
-            EntityIconResolver.Resolve(new VisualEntity { Name = "Thing", Kind = kind, Icon = icon });
+        static string Resolve(string icon, CastType type = CastType.Object) =>
+            EntityIconResolver.Resolve(new CastMember { Name = "Thing", Type = type, Icon = icon });
 
         [TestCase("subagent", "subagent")]
         [TestCase(" config-file ", "config-file")]
@@ -38,19 +38,32 @@ namespace ExamCards.Exam.Tests
             Assert.AreEqual(expected, EntityIconResolver.CleanKey(key));
 
         [Test]
-        public void Resolve_UsesTheEntitysIcon()
+        public void Resolve_UsesTheMembersIcon()
         {
-            Assert.AreEqual("subagent", Resolve("subagent", EntityKind.Actor));
+            Assert.AreEqual("subagent", Resolve("subagent", CastType.Actor));
             Assert.AreEqual("config-file", Resolve("config-file"));
         }
 
         [Test]
-        public void Resolve_WithoutAnIcon_FallsBackToTheKind()
+        [TestCase(CastType.Actor, EntityIconResolver.ActorIcon)]
+        [TestCase(CastType.System, EntityIconResolver.ObjectIcon)]
+        [TestCase(CastType.Object, EntityIconResolver.ObjectIcon)]
+        [TestCase(CastType.KnowledgeSource, EntityIconResolver.ObjectIcon)]
+        [TestCase(CastType.Artifact, EntityIconResolver.ObjectIcon)]
+        [TestCase(CastType.ExternalService, EntityIconResolver.ObjectIcon)]
+        [TestCase(CastType.Concept, EntityIconResolver.ObjectIcon)]
+        public void Resolve_WithoutAnIcon_FallsBackToTheType(CastType type, string expected)
         {
-            Assert.AreEqual(EntityIconResolver.ActorIcon, Resolve(null, EntityKind.Actor));
-            Assert.AreEqual(EntityIconResolver.ObjectIcon, Resolve(null));
-            Assert.AreEqual(EntityIconResolver.ActionIcon, Resolve("Not A Key", EntityKind.Action));
-            Assert.AreEqual(EntityIconResolver.ObjectIcon, EntityIconResolver.Resolve(null));
+            Assert.AreEqual(expected, Resolve(null, type));
+            Assert.AreEqual(expected, Resolve("Not A Key", type));
+        }
+
+        [Test]
+        public void Resolve_NullOrAnAction_FallsBack()
+        {
+            Assert.AreEqual(EntityIconResolver.ObjectIcon, EntityIconResolver.Resolve((CastMember)null));
+            Assert.AreEqual(EntityIconResolver.ActionIcon, EntityIconResolver.Resolve(new QuestionAction { Name = "Do" }));
+            Assert.AreEqual("send", EntityIconResolver.Resolve(new QuestionAction { Name = "Do", Icon = "send" }));
         }
 
         [Test]
@@ -80,10 +93,9 @@ namespace ExamCards.Exam.Tests
             // No latency: awaiting a delay would need the main thread this test is blocking.
             var round = new MockQuestionService(latencyMs: 0).StartRoundAsync().GetAwaiter().GetResult();
             var used = round.Questions
-                .Select(question => question.Entities)
-                .SelectMany(entities => entities.Question.Concat(entities.Answers.SelectMany(answer => answer)).Select(entity => entity.Icon)
-                    .Append(entities.QuestionIcon)
-                    .Concat(entities.AnswerIcons))
+                .SelectMany(question => question.Cast.Select(member => member.Icon)
+                    .Append(question.Icon)
+                    .Concat(question.Tools.Select(tool => tool.Icon)))
                 .Where(icon => icon != null)
                 .Distinct()
                 .ToList();

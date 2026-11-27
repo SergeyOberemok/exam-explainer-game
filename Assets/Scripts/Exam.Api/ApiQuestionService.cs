@@ -7,15 +7,15 @@ using UnityEngine;
 namespace ExamCards.Exam.Api
 {
     /// <summary>
-    /// Starts rounds on the backend's <c>/v1/game</c> routes. One <c>POST /v1/game/rounds</c> brings the questions
-    /// and their simplified versions, without the answer key; answers, 50/50 and later batches then go to that
-    /// round. Search uses <c>POST /v1/search/game-questions</c>, which also leaves the key out.
+    /// Starts rounds on the backend's <c>/v2/game</c> routes. One <c>POST /v2/game/rounds</c> brings the questions
+    /// as composed cards, without the answer key; answers, 50/50 and later batches then go to that round. Search
+    /// uses <c>POST /v2/search/game-questions</c>, which also leaves the key out.
     /// With the default transport, call it from the main thread (see <see cref="UnityWebRequestTransport"/>).
     /// </summary>
     public sealed class ApiQuestionService : IQuestionService, IQuestionSearch
     {
         /// <summary>The API version the game speaks; a breaking backend change moves to a new prefix.</summary>
-        public const string Prefix = "/v1";
+        public const string Prefix = "/v2";
 
         /// <summary>Seconds before the one retry of a transient failure (no response, 5xx).</summary>
         public const float DefaultRetryDelaySeconds = 0.5f;
@@ -55,11 +55,11 @@ namespace ExamCards.Exam.Api
         public async Task<IExamRound> StartRoundAsync(CancellationToken cancellationToken = default)
         {
             var request = new GameRoundRequestDto { count = _questionCount };
-            GameRoundDto round;
+            GameCardRoundDto round;
             try
             {
                 // Not idempotent: a retry would start a second round, so a failure goes to the player's Retry.
-                round = await _client.PostAsync<GameRoundDto>(Prefix + "/game/rounds", request, false, cancellationToken);
+                round = await _client.PostAsync<GameCardRoundDto>(Prefix + "/game/rounds", request, false, cancellationToken);
             }
             catch (ApiException e) when (e.Code == ApiErrorCodes.NoQuestions)
             {
@@ -81,7 +81,7 @@ namespace ExamCards.Exam.Api
             // A body, not a query string: a pasted question can be too long for a URL. Searching changes nothing,
             // so a transient failure is retried.
             var request = new GameSearchRequestDto { q = text, limit = _searchLimit };
-            var list = await _client.PostAsync<GameQuestionListDto>(Prefix + "/search/game-questions", request,
+            var list = await _client.PostAsync<GameCardListDto>(Prefix + "/search/game-questions", request,
                 true, cancellationToken);
             return GameQuestionMapper.ToSearchResults(list);
         }
