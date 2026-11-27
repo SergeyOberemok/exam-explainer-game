@@ -768,20 +768,14 @@
 
 /* ---------- answer cards ---------- */
 
-/* The cards take only what their short answers need (the tallest card sets the row), up to a share of the
-   screen; the question takes the rest. Once answered each card also shows its outcome, so the cap rises. */
+/* A fixed height on both sides of a card, so a flip never moves the row; a longer face scrolls in its card.
+   The question takes the rest. */
 .cards-row {
-    flex-grow: 0;
-    flex-shrink: 1;
-    min-height: 170px;
-    max-height: 42%;
+    flex-shrink: 0;
+    height: 300px;
     flex-direction: row;
     padding: 8px 0;
     margin: 12px -10px 8px -10px;
-}
-
-.cards-row--answered {
-    max-height: 58%;
 }
 
 .answer-card-slot {
@@ -790,8 +784,29 @@
     margin: 0 10px;
 }
 
+/* The flip: the card squashes to an edge (flip-out), swaps its face and opens again. USS has no 3D
+   rotation, so a horizontal scale stands in for it. */
 .answer-card {
     flex-grow: 1;
+    transition-property: scale;
+    transition-duration: 0.14s;
+    transition-timing-function: ease-in-out;
+}
+
+.answer-card--flip-out {
+    scale: 0 1;
+}
+
+/* The back is what the answer leads to; the cast chips describe the option, so they stay on the front. */
+.answer-card--back .card__entities {
+    display: none;
+}
+
+.card__face--back > .card__feedback,
+.card__face--back > .card__outcome {
+    margin-top: 0;
+    padding-top: 0;
+    border-top-width: 0;
 }
 
 .card__box {
@@ -803,10 +818,6 @@
     align-items: center;
     justify-content: space-between;
     margin-bottom: 6px;
-}
-
-.card__key > .chip__text {
-    letter-spacing: 0.55px;
 }
 
 .card__letter {
@@ -855,8 +866,8 @@
     border-color: var(--ink);
 }
 
-.card__impact {
-    align-self: flex-start;
+.card__impact > .chip__text {
+    letter-spacing: 0.55px;
 }
 
 .card__impact--success { background-color: var(--mint); }

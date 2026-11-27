@@ -47,7 +47,9 @@ namespace ExamCards.UI
         const string LoadingMoreText = "Loading more questions…";
         const string LoadMoreFailedText = "Could not load more questions. Press Next to retry.";
         const string RateLimitedText = "Too many requests. Wait a moment, then try again.";
-        const string CardsAnsweredClass = "cards-row--answered";
+
+        /// <summary>Time between one card turning over after an answer and the next.</summary>
+        const long FlipStaggerMs = 90;
 
         /// <summary>
         /// The question's parts type like someone writing instructions: a little faster than one long text, each
@@ -340,7 +342,11 @@ namespace ExamCards.UI
             {
                 if (keyboard[DigitKeys[i]].wasPressedThisFrame || keyboard[NumpadKeys[i]].wasPressedThisFrame)
                 {
-                    OnCardSelected(i);
+                    // Once answered a card's key turns it over.
+                    if (_session != null && _session.IsCurrentAnswered)
+                        _cards[i].Toggle();
+                    else
+                        OnCardSelected(i);
                     return;
                 }
             }
@@ -383,7 +389,6 @@ namespace ExamCards.UI
             _questionParts.Bind(null);
             _storyBeat.AddToClassList(HiddenClass);
             _cardsRow.Clear();
-            _cardsRow.RemoveFromClassList(CardsAnsweredClass);
             _cards.Clear();
             _panelView = null;
             ShowStatus(null);
@@ -580,7 +585,6 @@ namespace ExamCards.UI
                 _storyBeat.text = question.Beat;
                 _questionText.text = text;
             }
-            _cardsRow.EnableInClassList(CardsAnsweredClass, answered);
             _explanationText.text = review?.Explanation;
 
             _chapterLabel.text = ChapterText(question);
@@ -614,7 +618,7 @@ namespace ExamCards.UI
                 _cards[i].BindIcon(question.IconForAnswer(i));
                 _cards[i].BindEntities(question.ToolCast(i));
                 _cards[i].BindResolution(resolution?.ForAnswer(i), resolution?.MetCount(i) ?? 0, requirementCount);
-                _cards[i].SetState(GetCardState(i));
+                _cards[i].SetState(GetCardState(i), FlipDelayMs(i));
             }
 
             for (var i = 0; i < _hearts.Count; i++)
@@ -678,6 +682,17 @@ namespace ExamCards.UI
                 : $"What the answer had to do · yours meets {metCount} of {requirements.Count}";
             _requirements.BindRequirements(requirements, met);
             _requirements.BindAnswerNotes(review?.Review?.Feedbacks, review?.CorrectIndex ?? -1, counted);
+        }
+
+        /// <summary>
+        /// When a card turns over after an answer: the answer that counts first, then the others in order
+        /// after it. Only used when a card becomes answered.
+        /// </summary>
+        long FlipDelayMs(int index)
+        {
+            var first = _session.AnsweredIndex ?? 0;
+            var order = (index - first + _cards.Count) % _cards.Count;
+            return order * FlipStaggerMs;
         }
 
         AnswerCardState GetCardState(int index)

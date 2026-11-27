@@ -108,7 +108,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
 - **UI — `Assets/UI/PickOne/`** (lives in Assembly-CSharp):
   - `PickOne.uxml` is the whole screen. `AnswerCard.uxml` is the per-answer card template, instantiated from code into `cardsRow`.
   - `PickOne.uss` holds all styles. The palette lives as `:root` variables.
-  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) starts a round and handles input: card picks (click or keys 1–4), 50/50 (click or F), Q (debrief/question tab), M (map), and Next, Play Again and Retry (click, Enter or Space). At the end it shows the results overlay.
+  - `PickOneScreen` (MonoBehaviour on the `UIDocument` GameObject) starts a round and handles input: card picks (click or keys 1–4; once answered they flip the card), 50/50 (click or F), Q (debrief/question tab), M (map), and Next, Play Again and Retry (click, Enter or Space). At the end it shows the results overlay.
     - It creates the question service inside the load, so a bad setting ends in the failure message too.
     - A failed or empty load (including `NoQuestionsException`) shows a message and the Retry button. In a player build a missing service factory is logged as an error instead of quietly serving mock questions.
     - Next on the last loaded question loads the round's next batch (`LoadMoreAndAdvance`, status "Loading more questions…"; Next retries a failure). The results show the score out of answered questions.
@@ -122,7 +122,7 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - Without an ask, the stem (`OriginalText`) types alone after the beat.
     - Enter/Space or a click on the question panel finishes the typing at once. A redraw while typing with the same text (50/50, busy) leaves it alone; an answer or a text change shows everything at once.
     - The panel scrolls back to the top only when what it shows changes (new question, debrief/question tab, scenario text).
-  - **Layout:** the question panel (`.question-section`, `flex-grow`, min 300 px) takes the room the cards don't need. `cardsRow` is sized to its tallest card (`card__scroll` has `flex-basis: auto`), from 170 px up to 42 % of the main area. `cards-row--answered` (set while answered) raises the cap to 58 % for the outcomes; a card scrolls only past the cap.
+  - **Layout:** the question panel (`.question-section`, `flex-grow`, min 300 px) takes the room the cards don't need. `cardsRow` has a fixed height of 300 px before and after answering, so a flip never moves it; a face longer than its card scrolls in `cardScroll`.
     - `chapterChip` (chapter and stage, hidden without a chapter) toggles the whole `Text` with its scenario paragraph for the current question (`_showScenario`, reset per question).
   - **Debrief:** once answered, the panel's `panelTabs` (DEBRIEF / QUESTION, or Q) switch it between the question and the debrief (`explanationSection`). An answer opens the debrief (`_showQuestionAfterAnswer`, reset per question); the chapter chip switches to the question. The debrief shows, in order:
     1. `storyOutcome` (the story line)
@@ -146,12 +146,15 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - Laying out takes two passes. `Bind` builds the boxes (`.flow-node`, absolute, fixed width) and edge labels hidden under `map__canvas--measuring`. Once the modal is open and every box and label has a size, it runs `FlowMapModel.Layout`, then sets the boxes' and labels' `left`/`top`, the canvas size and its centring margin. A hidden element gets no layout, so the second pass waits for the modal to open. It polls every 16 ms, at most 30 times; after that, anything still unsized takes a stand-in size so the map still shows.
     - `FlowEdgeLayer` (first child of the canvas) draws the edges with Painter2D: vertical beziers through the layout's points, an arrowhead at the target, added edges thicker and green, inferred and answer edges muted, answer edges dashed (`SetDashPattern`, reset per path). Its colours are the USS custom properties `--flow-edge-*` on `.flow-edges`. Edge labels are absolute `Label`s centred on the layout's label points.
   - **Outcomes on the cards:** once answered, a card with an `AnswerOutcome` shows `outcomeSection` instead of the source feedback (the debrief lists that), via `AnswerCardView.BindResolution`:
-    - an impact chip (WORKS / PARTLY WORKS / FAILS, `card__impact--success|partial|failure`)
     - the `Consequence` and the `Reason`
     - "Meets n of m requirements" (with `HasRequirementMatches`)
     - for a wrong answer, "Missing: …" from its `Gaps`
 
-    The card also gets `answer-card--impact-*`; a picked partial answer is tinted gold and labelled "Partly works". Without an outcome the card shows the feedback as before. Empty lines are hidden.
+    The impact chip (WORKS / PARTLY WORKS / FAILS, `card__impact--success|partial|failure`) is in the card's header, not the back, so it shows on both faces once answered; before that it is hidden. The cards show no key hints (no key chip, no `[n]` in the select button), but the keys 1–4 still work. The card also gets `answer-card--impact-*`; a picked partial answer is tinted gold and labelled "Partly works". Without an outcome the card shows the feedback as before. Empty lines are hidden.
+  - **Card flip:** a card has two faces in `cardScroll`. `cardFront` holds the answer (and the cast chips show only on the front). `cardBack` holds the feedback or `outcomeSection`.
+    - When the question is answered, `SetState` flips every card that has a back. The answer that counts goes first, and each next card waits `FlipStaggerMs` (90 ms). Afterwards a click on the card or its key 1–4 (`Toggle`) flips it again.
+    - UI Toolkit has no 3D rotation, so the flip is a USS `scale` transition. `answer-card--flip-out` squashes the card to `scale: 0 1`. After `FlipHalfMs` (140 ms, matching the USS duration) the faces swap and the class comes off. A flip asked for while one runs only changes the side it lands on.
+    - A new answer text in `Bind`, or an unanswered state, puts the card back on its front at once. The click that answers doesn't also flip back, because the card notes on `PointerDown` (trickle-down) whether it was already answered.
   - `AnswerCardView` binds one card's text and switches state only through USS classes (`answer-card--interactive|correct|wrong|dimmed|eliminated`). `Bind` doesn't touch state.
   - **Large icons** (`.hero-icon`): `questionIcon` in the question's chip row shows `Question.Icon`, and `cardIcon` in each card's header (`AnswerCardView.BindIcon`) shows `IconForAnswer(i)`. A question or tool without a key shows `DefaultIcon`. USS tints a card's icon by its state class.
   - `EntityStripView` fills a container with cast chips: icon + name, or icon only with `compact`. Type colours come from `entity--actor|object|concept`; `entity--action` stays for actions.

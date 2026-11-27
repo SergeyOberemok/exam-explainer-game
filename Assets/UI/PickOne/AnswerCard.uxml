@@ -10,28 +10,29 @@
                 <ui:VisualElement class="hero-icon card__icon">
                     <ui:VisualElement name="cardIcon" class="hero-icon__image" picking-mode="Ignore" />
                 </ui:VisualElement>
-                <ui:VisualElement class="chip chip--peach-2 chip--raised card__key">
-                    <ui:Label name="keyLabel" text="Key [1]" class="chip__text" />
+                <ui:VisualElement name="impactChip" class="chip card__impact is-hidden">
+                    <ui:Label name="impactLabel" enable-rich-text="false" class="chip__text" />
                 </ui:VisualElement>
             </ui:VisualElement>
             <ui:ScrollView name="cardScroll" mode="Vertical" horizontal-scroller-visibility="Hidden" class="card__scroll">
-                <ui:Label name="answerText" text="Answer" enable-rich-text="false" class="card__answer" />
-                <ui:Label name="feedbackText" text="Feedback" enable-rich-text="false" class="card__feedback is-hidden" />
-                <ui:VisualElement name="outcomeSection" class="card__outcome is-hidden">
-                    <ui:VisualElement name="impactChip" class="chip card__impact">
-                        <ui:Label name="impactLabel" enable-rich-text="false" class="chip__text" />
+                <ui:VisualElement name="cardFront" class="card__face card__face--front">
+                    <ui:Label name="answerText" text="Answer" enable-rich-text="false" class="card__answer" />
+                </ui:VisualElement>
+                <ui:VisualElement name="cardBack" class="card__face card__face--back is-hidden">
+                    <ui:Label name="feedbackText" text="Feedback" enable-rich-text="false" class="card__feedback is-hidden" />
+                    <ui:VisualElement name="outcomeSection" class="card__outcome is-hidden">
+                        <ui:Label name="consequenceText" enable-rich-text="false" class="card__consequence is-hidden" />
+                        <ui:Label name="reasonText" enable-rich-text="false" class="card__reason is-hidden" />
+                        <ui:Label name="metText" enable-rich-text="false" class="card__met is-hidden" />
+                        <ui:Label name="gapsText" enable-rich-text="false" class="card__gaps is-hidden" />
                     </ui:VisualElement>
-                    <ui:Label name="consequenceText" enable-rich-text="false" class="card__consequence is-hidden" />
-                    <ui:Label name="reasonText" enable-rich-text="false" class="card__reason is-hidden" />
-                    <ui:Label name="metText" enable-rich-text="false" class="card__met is-hidden" />
-                    <ui:Label name="gapsText" enable-rich-text="false" class="card__gaps is-hidden" />
                 </ui:VisualElement>
             </ui:ScrollView>
             <ui:VisualElement name="cardEntities" class="card__entities is-hidden" />
             <ui:VisualElement class="select-wrap brutal brutal--s3">
                 <ui:VisualElement class="brutal__shadow" picking-mode="Ignore" />
                 <ui:Button name="selectButton" focusable="false" class="select-button">
-                    <ui:Label name="selectLabel" text="Select Card [1]" class="select-button__text" picking-mode="Ignore" />
+                    <ui:Label name="selectLabel" text="Select Card" class="select-button__text" picking-mode="Ignore" />
                     <ui:VisualElement class="icon icon--select" picking-mode="Ignore" />
                 </ui:Button>
             </ui:VisualElement>
