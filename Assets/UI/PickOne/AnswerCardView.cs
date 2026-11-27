@@ -127,8 +127,8 @@ namespace ExamCards.UI
 
         /// <summary>
         /// Fills the back with what the answer leads to (an impact chip and the story line), why it is right or
-        /// wrong, how many of the question's requirements it meets and what it misses. Without an outcome the
-        /// back shows the source feedback instead. A partial answer also tints the card. Doesn't touch the
+        /// wrong, how many of the question's requirements it meets and what it misses. The back also shows the
+        /// source feedback for the answer, above the outcome. A partial answer also tints the card. Doesn't touch the
         /// card's state.
         /// </summary>
         /// <param name="met">Requirements the answer meets.</param>
@@ -270,14 +270,14 @@ namespace ExamCards.UI
         };
 
         /// <summary>
-        /// The feedback (without an outcome) or the outcome shows only once the question is answered, and each
-        /// line only when it has text.
+        /// The feedback and the outcome show only once the question is answered, and each line only when it
+        /// has text.
         /// </summary>
         void UpdateReviewVisibility()
         {
             var answered = IsAnswered(_state);
             var hasOutcome = _outcome != null;
-            _feedbackText.EnableInClassList(HiddenClass, !answered || hasOutcome || string.IsNullOrEmpty(_feedbackText.text));
+            _feedbackText.EnableInClassList(HiddenClass, !answered || string.IsNullOrEmpty(_feedbackText.text));
             _outcomeSection.EnableInClassList(HiddenClass, !answered || !hasOutcome);
             _impactChip.EnableInClassList(HiddenClass, !answered || !hasOutcome);
             _consequenceText.EnableInClassList(HiddenClass, string.IsNullOrEmpty(_consequenceText.text));

@@ -113,10 +113,6 @@
                             </ui:VisualElement>
                             <ui:Label text="Explanation" class="explanation__title" />
                             <ui:Label name="explanationText" text="Explanation" enable-rich-text="false" class="explanation__text" />
-                            <ui:VisualElement name="answerNotesSection" class="debrief-block is-hidden">
-                                <ui:Label text="Every answer" class="explanation__title" />
-                                <ui:VisualElement name="answerNotes" class="answer-notes" />
-                            </ui:VisualElement>
                         </ui:VisualElement>
                     </ui:ScrollView>
                     <ui:VisualElement name="questionEntities" class="entity-strip entity-strip--bottom is-hidden" />

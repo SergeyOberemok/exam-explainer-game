@@ -561,44 +561,6 @@
     white-space: normal;
 }
 
-.answer-note {
-    flex-direction: row;
-    align-items: flex-start;
-    margin-bottom: 6px;
-}
-
-.answer-note__letter {
-    width: 22px;
-    height: 22px;
-    margin-right: 8px;
-    flex-shrink: 0;
-    border-width: 1px;
-    border-color: var(--ink);
-    background-color: var(--peach);
-    font-size: 12px;
-    -unity-font-style: bold;
-    -unity-text-align: middle-center;
-    color: var(--ink);
-}
-
-.answer-note__letter--correct {
-    background-color: var(--mint);
-    color: var(--mint-ink);
-}
-
-.answer-note__letter--wrong {
-    background-color: var(--pink);
-    color: var(--pink-ink);
-}
-
-.answer-note__text {
-    flex-shrink: 1;
-    flex-grow: 1;
-    font-size: 13px;
-    color: var(--muted);
-    white-space: normal;
-}
-
 /* At the right of the chip row: the debrief / question switch of an answered question, and the map button. */
 .meta-actions {
     flex-direction: row;
@@ -840,6 +802,11 @@
     border-top-width: 0;
 }
 
+/* Feedback above the outcome: space between them. */
+.card__face--back > .card__feedback {
+    margin-bottom: 10px;
+}
+
 .card__box {
     padding: 10px;
 }
@@ -1032,7 +999,7 @@
 }
 
 .answer-card--dimmed {
-    opacity: 0.8;
+    opacity: 1;
 }
 
 .answer-card--correct .icon--select,

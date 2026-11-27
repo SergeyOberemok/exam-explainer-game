@@ -130,9 +130,8 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     3. the misconception of the answer that counts ("Why it was tempting", wrong answers only)
     4. the requirements, with a ✓/✗ for the answer that counts (only with `HasRequirementMatches`)
     5. the explanation
-    6. every answer's source feedback
 
-    `RequirementsView` builds the last two lists. Sections without data are hidden.
+    Each answer's source feedback is on its own card's back, not in the debrief. Sections without data are hidden.
   - `SearchPanelView` is the search modal (`searchOverlay`): a debounced text field (300 ms), a status line, result rows built in code, and arrow-key selection.
     - Each row has a section chip, a NEW / IN THIS ROUND / CURRENT QUESTION / ANSWERED chip, the `OriginalText` and the answers, never the correct one.
     - The text field is multiline only so long text wraps (it grows to 160 px, then scrolls). A trickle-down `KeyDownEvent` handler keeps Enter and ↑/↓ from the field, so they only play / move the highlighted result. Pasted line breaks become spaces.
@@ -145,12 +144,12 @@ ExamCards is a Unity 6 (`6000.6.3f1`, URP 2D) quiz game. The player meets exam q
     - It closes on a new question, a new round and the results. An answer or a 50/50 that lands while it is open rebinds it (`RefreshMap`). The view keeps its layout while the bind key (question, map, eliminated answers) is the same; a new round calls `FlowMapView.Reset`, since a question there can have the same id and a different map.
     - Laying out takes two passes. `Bind` builds the boxes (`.flow-node`, absolute, fixed width) and edge labels hidden under `map__canvas--measuring`. Once the modal is open and every box and label has a size, it runs `FlowMapModel.Layout`, then sets the boxes' and labels' `left`/`top`, the canvas size and its centring margin. A hidden element gets no layout, so the second pass waits for the modal to open. It polls every 16 ms, at most 30 times; after that, anything still unsized takes a stand-in size so the map still shows.
     - `FlowEdgeLayer` (first child of the canvas) draws the edges with Painter2D: vertical beziers through the layout's points, an arrowhead at the target, added edges thicker and green, inferred and answer edges muted, answer edges dashed (`SetDashPattern`, reset per path). Its colours are the USS custom properties `--flow-edge-*` on `.flow-edges`. Edge labels are absolute `Label`s centred on the layout's label points.
-  - **Outcomes on the cards:** once answered, a card with an `AnswerOutcome` shows `outcomeSection` instead of the source feedback (the debrief lists that), via `AnswerCardView.BindResolution`:
+  - **Outcomes on the cards:** once answered, a card's back shows its own source feedback, and with an `AnswerOutcome` also `outcomeSection` below it, via `AnswerCardView.BindResolution`:
     - the `Consequence` and the `Reason`
     - "Meets n of m requirements" (with `HasRequirementMatches`)
     - for a wrong answer, "Missing: …" from its `Gaps`
 
-    The impact chip (WORKS / PARTLY WORKS / FAILS, `card__impact--success|partial|failure`) is in the card's header, not the back, so it shows on both faces once answered; before that it is hidden. The cards show no key hints (no key chip, no `[n]` in the select button), but the keys 1–4 still work. The card also gets `answer-card--impact-*`; a picked partial answer is tinted gold and labelled "Partly works". Without an outcome the card shows the feedback as before. Empty lines are hidden.
+    The impact chip (WORKS / PARTLY WORKS / FAILS, `card__impact--success|partial|failure`) is in the card's header, not the back, so it shows on both faces once answered; before that it is hidden. The cards show no key hints (no key chip, no `[n]` in the select button), but the keys 1–4 still work. The card also gets `answer-card--impact-*`; a picked partial answer is tinted gold and labelled "Partly works". Without an outcome the card shows just the feedback. Empty lines are hidden.
   - **Card flip:** a card has two faces in `cardScroll`. `cardFront` holds the answer (and the cast chips show only on the front). `cardBack` holds the feedback or `outcomeSection`.
     - When the question is answered, `SetState` flips every card that has a back. The answer that counts goes first, and each next card waits `FlipStaggerMs` (90 ms). Afterwards a click on the card or its key 1–4 (`Toggle`) flips it again.
     - UI Toolkit has no 3D rotation, so the flip is a USS `scale` transition. `answer-card--flip-out` squashes the card to `scale: 0 1`. After `FlipHalfMs` (140 ms, matching the USS duration) the faces swap and the class comes off. A flip asked for while one runs only changes the side it lands on.

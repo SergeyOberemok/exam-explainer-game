@@ -106,7 +106,6 @@ namespace ExamCards.UI
         VisualElement _questionTab;
         VisualElement _misconceptionSection;
         Label _misconceptionText;
-        RequirementsView _requirements;
 
         /// <summary>The player asked to see the scenario paragraph of the current question again.</summary>
         bool _showScenario;
@@ -173,7 +172,6 @@ namespace ExamCards.UI
             _questionTab.RegisterCallback<ClickEvent>(OnQuestionTabClicked);
             _misconceptionSection = root.Q("misconceptionSection");
             _misconceptionText = root.Q<Label>("misconceptionText");
-            _requirements = new RequirementsView(root);
             _chapterChip.RegisterCallback<ClickEvent>(OnChapterClicked);
             _devIdChip = root.Q("devIdChip");
             _devIdLabel = root.Q<Label>("devIdLabel");
@@ -696,8 +694,8 @@ namespace ExamCards.UI
         }
 
         /// <summary>
-        /// The debrief's lists: why the answer that counts was tempting (when wrong) and every answer's
-        /// feedback. The criteria live in their own modal. A null review clears them.
+        /// The debrief's list: why the answer that counts was tempting (when wrong). Each answer's feedback is
+        /// on its own card and the criteria live in their own modal. A null review clears it.
         /// </summary>
         void RenderDebrief(AnswerReview review)
         {
@@ -705,8 +703,6 @@ namespace ExamCards.UI
             var misconception = counted is int answer ? review.MisconceptionFor(answer) : null;
             _misconceptionText.text = misconception ?? string.Empty;
             _misconceptionSection.EnableInClassList(HiddenClass, string.IsNullOrEmpty(misconception));
-
-            _requirements.BindAnswerNotes(review?.Review?.Feedbacks, review?.CorrectIndex ?? -1, counted);
         }
 
         /// <summary>
